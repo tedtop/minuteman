@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fuel Dispatch Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .auth-form {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .dispatch-grid {
+            display: grid;
+            gap: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+
+        .dispatch-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid #667eea;
+            transition: all 0.3s ease;
+        }
+
+        .dispatch-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .dispatch-card.priority {
+            border-left-color: #e74c3c;
+        }
+
+        .dispatch-card.completed {
+            border-left-color: #27ae60;
+            opacity: 0.7;
+        }
+
+        .flight-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .flight-number {
+            font-size: 20px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        .flight-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .flight-status.in-flight {
+            background: #ffeaa7;
+            color: #856404;
+        }
+
+        .flight-status.in {
+            background: #a8e6cf;
+            color: #155724;
+        }
+
+        .flight-status.planned {
+            background: #ddd6fe;
+            color: #553c9a;
+        }
+
+        .flight-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .info-item {
+            background: rgba(102, 126, 234, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .fuel-info {
+            background: rgba(39, 174, 96, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+
+        .fuel-quantity {
+            font-size: 18px;
+            font-weight: 700;
+            color: #27ae60;
+            text-align: center;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: rgba(231, 76, 60, 0.1);
+            color: #c0392b;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .last-updated {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .dispatch-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .flight-info {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛫 Fuel Dispatch Monitor</h1>
+            <div class="status" id="status">Disconnected</div>
+            <div class="controls">
+                <button class="btn btn-primary" onclick="startMonitoring()">Start Monitoring</button>
+                <button class="btn btn-secondary" onclick="stopMonitoring()">Stop Monitoring</button>
+                <button class="btn btn-secondary" onclick="refreshData()">Refresh</button>
+            </div>
+        </div>
+
+        <div class="auth-form" id="authForm">
+            <h3 style="margin-bottom: 20px; color: #2c3e50;">QT Technologies Authentication</h3>
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" placeholder="Enter your username">
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" placeholder="Enter your password">
+            </div>
+            <div class="form-group">
+                <label for="companyLocationId">Company Location ID:</label>
+                <input type="text" id="companyLocationId" value="ed63405a-8c05-ea11-803a-18a90577c142" placeholder="Company Location ID">
+            </div>
+            <div class="form-group">
+                <label for="userId">User ID:</label>
+                <input type="text" id="userId" value="ab14e958-7499-4534-a930-4ed1361c888e" placeholder="User ID">
+            </div>
+            <button class="btn btn-primary" onclick="authenticate()" style="width: 100%;">Authenticate</button>
+        </div>
+
+        <div id="errorMessage" class="error" style="display: none;"></div>
+        <div id="loadingMessage" class="loading" style="display: none;">Loading dispatch data...</div>
+        
+        <div id="dispatchContainer" class="dispatch-grid"></div>
+        
+        <div class="last-updated" id="lastUpdated"></div>
+    </div>
+
+    <script>
+        let isMonitoring = false;
+        let monitoringInterval;
+        let authToken = null;
+        let sessionData = null;
+
+        // Configuration
+        const QT_BASE_URL = 'https://qttechnologies.com'; // You'll need to update this with the actual API endpoint
+        const POLL_INTERVAL = 30000; // 30 seconds
+
+        // Authentication function
+        async function authenticate() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const companyLocationId = document.getElementById('companyLocationId').value;
+            const userId = document.getElementById('userId').value;
+
+            if (!username || !password) {
+                showError('Please enter both username and password');
+                return;
+            }
+
+            updateStatus('connecting');
+            
+            try {
+                // This is a placeholder for the actual authentication process
+                // You'll need to implement the actual QT Technologies authentication
+                
+                // For now, we'll simulate authentication and use the sample data
+                authToken = 'simulated-token';
+                sessionData = {
+                    companyLocationId: companyLocationId,
+                    userId: userId
+                };
+                
+                updateStatus('connected');
+                document.getElementById('authForm').style.display = 'none';
+                showSuccess('Authentication successful!');
+                
+                // Load initial data
+                await fetchDispatchData();
+                
+            } catch (error) {
+                updateStatus('disconnected');
+                showError('Authentication failed: ' + error.message);
+            }
+        }
+
+        // Fetch dispatch data from QT Technologies
+        async function fetchDispatchData() {
+            if (!authToken) {
+                showError('Please authenticate first');
+                return;
+            }
+
+            try {
+                showLoading(true);
+                
+                // For demonstration, we'll use the sample data you provided
+                // In a real implementation, you would make an actual API call like:
+                /*
+                const response = await fetch(`${QT_BASE_URL}/api/GetDispatchDetail`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        CompanyLocationID: sessionData.companyLocationId,
+                        UserID: sessionData.userId
+                    })
+                });
+                
+                const data = await response.json();
+                */
+                
+                // Using sample data for demonstration
+                const sampleData = {
+                    "Success": true,
+                    "Detail": {
+                        "Dispatches": [
+                            {
+                                "FlightNumber": "UA5941",
+                                "AirlineName": "UA/SkyWest Airlines",
+                                "TailNumber": "N779SK",
+                                "DepartureDate": "2025-06-24 17:25",
+                                "ArrivalDate": "2025-06-24 16:27",
+                                "Destination": "DEN",
+                                "AircraftType": "CR7",
+                                "FlightStatus": "In Flight",
+                                "Quantity": 1726.9,
+                                "QuantityInWeight": 11570,
+                                "Gate": "?",
+                                "TerminalNumber": "?",
+                                "TimeOnGround": "00:58"
+                            },
+                            {
+                                "FlightNumber": "AA3899",
+                                "AirlineName": "AA/Envoy Air",
+                                "TailNumber": "N293NN",
+                                "DepartureDate": "2025-06-25 05:38",
+                                "ArrivalDate": "2025-06-24 23:32",
+                                "Destination": "ORD",
+                                "AircraftType": "E75E",
+                                "FlightStatus": "In",
+                                "Quantity": 2826.9,
+                                "QuantityInWeight": 18940,
+                                "Gate": "3",
+                                "TerminalNumber": "A",
+                                "TimeOnGround": "06:06"
+                            }
+                        ]
+                    }
+                };
+
+                if (sampleData.Success) {
+                    displayDispatchData(sampleData.Detail.Dispatches);
+                    updateLastUpdated();
+                } else {
+                    showError('Failed to fetch dispatch data');
+                }
+                
+            } catch (error) {
+                showError('Error fetching dispatch data: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Display dispatch data
+        function displayDispatchData(dispatches) {
+            const container = document.getElementById('dispatchContainer');
+            container.innerHTML = '';
+
+            if (!dispatches || dispatches.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: rgba(255,255,255,0.8); padding: 40px;">No dispatches available</div>';
+                return;
+            }
+
+            dispatches.forEach(dispatch => {
+                const card = createDispatchCard(dispatch);
+                container.appendChild(card);
+            });
+        }
+
+        // Create dispatch card
+        function createDispatchCard(dispatch) {
+            const card = document.createElement('div');
+            card.className = 'dispatch-card';
+            
+            // Add priority class based on status
+            if (dispatch.FlightStatus === 'In Flight') {
+                card.classList.add('priority');
+            } else if (dispatch.FlightStatus === 'Completed') {
+                card.classList.add('completed');
+            }
+
+            const statusClass = dispatch.FlightStatus.toLowerCase().replace(' ', '-');
+            
+            card.innerHTML = `
+                <div class="flight-header">
+                    <div class="flight-number">${dispatch.FlightNumber}</div>
+                    <div class="flight-status ${statusClass}">${dispatch.FlightStatus}</div>
+                </div>
+                
+                <div class="flight-info">
+                    <div class="info-item">
+                        <div class="info-label">Airline</div>
+                        <div class="info-value">${dispatch.AirlineName}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Tail Number</div>
+                        <div class="info-value">${dispatch.TailNumber}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Departure</div>
+                        <div class="info-value">${formatDateTime(dispatch.DepartureDate)}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Destination</div>
+                        <div class="info-value">${dispatch.Destination}</div>
+                    </div>
+                </div>
+                
+                <div class="fuel-info">
+                    <div class="fuel-quantity">
+                        ${dispatch.Quantity} gal (${dispatch.QuantityInWeight} lbs)
+                    </div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        // Utility functions
+        function formatDateTime(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        function updateStatus(status) {
+            const statusElement = document.getElementById('status');
+            statusElement.className = 'status ' + status;
+            
+            switch(status) {
+                case 'connected':
+                    statusElement.textContent = '🟢 Connected';
+                    break;
+                case 'connecting':
+                    statusElement.textContent = '🟡 Connecting...';
+                    break;
+                case 'disconnected':
+                    statusElement.textContent = '🔴 Disconnected';
+                    break;
+            }
+        }
+
+        function showError(message) {
+            const errorElement = document.getElementById('errorMessage');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+            setTimeout(() => {
+                errorElement.style.display = 'none';
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            // You can implement a success message display here
+            console.log('Success:', message);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingMessage').style.display = show ? 'block' : 'none';
+        }
+
+        function updateLastUpdated() {
+            const lastUpdatedElement = document.getElementById('lastUpdated');
+            lastUpdatedElement.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+        }
+
+        // Monitoring functions
+        function startMonitoring() {
+            if (isMonitoring) return;
+            
+            if (!authToken) {
+                showError('Please authenticate first');
+                return;
+            }
+
+            isMonitoring = true;
+            updateStatus('connected');
+            
+            // Fetch data immediately
+            fetchDispatchData();
+            
+            // Set up polling interval
+            monitoringInterval = setInterval(fetchDispatchData, POLL_INTERVAL);
+        }
+
+        function stopMonitoring() {
+            isMonitoring = false;
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+                monitoringInterval = null;
+            }
+            updateStatus('disconnected');
+        }
+
+        function refreshData() {
+            if (authToken) {
+                fetchDispatchData();
+            } else {
+                showError('Please authenticate first');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateStatus('disconnected');
+        });
+    </script>
+</body>
+</html>
