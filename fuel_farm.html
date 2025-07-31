@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fuel Farm Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            color: #333;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .refresh-counter {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-left: 10px;
+            background: rgba(0, 123, 255, 0.1);
+            color: #007bff;
+            border: 1px solid rgba(0, 123, 255, 0.2);
+        }
+
+
+        .tanks-container {
+            display: flex;
+            gap: 20px;
+            max-width: 100%;
+            margin: 0 auto;
+            overflow-x: auto;
+            padding: 10px;
+            justify-content: center;
+        }
+
+        .tank-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            text-align: center;
+            flex: 0 0 160px;
+            min-width: 160px;
+        }
+
+        .tank-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .tank-header {
+            margin-bottom: 20px;
+        }
+
+        .tank-name {
+            font-size: 24px;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .fuel-type {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            display: inline-block;
+        }
+
+        .fuel-type.avgas {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .fuel-type.jet-a {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .tank-visual {
+            position: relative;
+            width: 80px;
+            height: 200px;
+            margin: 20px auto;
+            background: #f8f9fa;
+            border: 3px solid #dee2e6;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .fuel-level {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            transition: height 0.8s ease;
+            border-radius: 0 0 7px 7px;
+        }
+
+        .fuel-level.avgas {
+            background: linear-gradient(180deg, #ffc107 0%, #fd7e14 100%);
+            box-shadow: 0 -2px 10px rgba(255, 193, 7, 0.3);
+        }
+
+        .fuel-level.jet-a {
+            background: linear-gradient(180deg, #17a2b8 0%, #138496 100%);
+            box-shadow: 0 -2px 10px rgba(23, 162, 184, 0.3);
+        }
+
+        .level-markers {
+            position: absolute;
+            left: -10px;
+            top: 0;
+            height: 100%;
+            width: 20px;
+        }
+
+        .marker {
+            position: absolute;
+            left: 0;
+            width: 8px;
+            height: 1px;
+            background: #6c757d;
+        }
+
+        .marker.major {
+            width: 12px;
+            height: 2px;
+            background: #495057;
+        }
+
+        .level-info {
+            margin-top: 20px;
+        }
+
+        .current-level {
+            font-size: 28px;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .level-percentage {
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 15px;
+        }
+
+        .update-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .level-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .level-input::placeholder {
+            font-size: 11px;
+            color: #999;
+        }
+
+        .level-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+
+        .update-btn {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .update-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 123, 255, 0.4);
+        }
+
+        .update-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .last-updated {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 10px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 12px;
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .tanks-container {
+                gap: 15px;
+                padding: 5px;
+            }
+            
+            .tank-card {
+                flex: 0 0 140px;
+                min-width: 140px;
+                padding: 15px;
+            }
+            
+            .tank-visual {
+                width: 60px;
+                height: 150px;
+            }
+            
+            .tank-name {
+                font-size: 20px;
+            }
+            
+            .current-level {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>⛽ Fuel Farm Levels</h1>
+        <div class="status" id="status">🟢 Connected</div>
+        <div class="refresh-counter" id="refreshCounter">Next refresh in: 30s</div>
+    </div>
+
+    <div class="tanks-container" id="tanksContainer">
+        <!-- Tanks will be populated by JavaScript -->
+    </div>
+
+    <script>
+        const API_BASE_URL = `${window.location.protocol}//${window.location.host}/api/fuel-farm`;
+        let tanks = {};
+        let refreshCountdown = 30;
+        let countdownInterval;
+
+        // Load tank data on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            loadTankData();
+            startRefreshCounter();
+            // Refresh data every 30 seconds
+            setInterval(() => {
+                loadTankData();
+                resetRefreshCounter();
+            }, 30000);
+        });
+
+        async function loadTankData() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/tanks`);
+                const data = await response.json();
+
+                if (data.success) {
+                    tanks = data.tanks;
+                    renderTanks();
+                    updateStatus('connected');
+                } else {
+                    showError('Failed to load tank data');
+                }
+            } catch (error) {
+                console.error('Error loading tank data:', error);
+                showError('Connection error: ' + error.message);
+            }
+        }
+
+        function renderTanks() {
+            const container = document.getElementById('tanksContainer');
+            container.innerHTML = '';
+
+            Object.entries(tanks).forEach(([tankId, tank]) => {
+                const tankCard = createTankCard(tankId, tank);
+                container.appendChild(tankCard);
+            });
+        }
+
+        function createTankCard(tankId, tank) {
+            const card = document.createElement('div');
+            card.className = 'tank-card';
+
+            const percentage = Math.round((tank.level / tank.maxLevel) * 100);
+            const levelHeight = (tank.level / tank.maxLevel) * 100;
+            const fuelTypeClass = tank.fuelType === 'Avgas' ? 'avgas' : 'jet-a';
+
+            card.innerHTML = `
+                <div class="tank-header">
+                    <div class="tank-name">${tankId}</div>
+                    <div class="fuel-type ${fuelTypeClass}">${tank.fuelType}</div>
+                </div>
+
+                <div class="tank-visual">
+                    <div class="fuel-level ${fuelTypeClass}" style="height: ${levelHeight}%"></div>
+                    <div class="level-markers">
+                        ${generateMarkers()}
+                    </div>
+                </div>
+
+                <div class="level-info">
+                    <div class="current-level">${tank.level}"</div>
+                    <div class="level-percentage">${percentage}% (${tank.maxLevel}" max)</div>
+                </div>
+
+                <div class="update-section">
+                    <div class="input-group">
+                        <input type="number"
+                               class="level-input"
+                               id="input-${tankId}"
+                               placeholder="Level (inches)"
+                               min="0"
+                               max="${tank.maxLevel}"
+                               step="0.1"
+                               onkeypress="handleEnterKey(event, '${tankId}')"
+                               onfocus="this.placeholder=''"
+                               onblur="this.placeholder='Level (inches)'">
+                        <button class="update-btn" onclick="updateTankLevel('${tankId}')">
+                            Update
+                        </button>
+                    </div>
+                    <div class="error" id="error-${tankId}"></div>
+                    <div class="success" id="success-${tankId}"></div>
+                    <div class="last-updated">
+                        Updated: ${formatDateTime(tank.lastUpdated)}
+                    </div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        function generateMarkers() {
+            let markers = '';
+            for (let i = 0; i <= 86; i += 10) {
+                const position = ((86 - i) / 86) * 100;
+                const isMajor = i % 20 === 0;
+                markers += `<div class="marker ${isMajor ? 'major' : ''}" style="top: ${position}%"></div>`;
+            }
+            return markers;
+        }
+
+        async function updateTankLevel(tankId) {
+            const input = document.getElementById(`input-${tankId}`);
+            const errorDiv = document.getElementById(`error-${tankId}`);
+            const successDiv = document.getElementById(`success-${tankId}`);
+            const level = parseFloat(input.value);
+
+            // Clear previous messages
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+
+            if (isNaN(level) || level < 0 || level > 86) {
+                showMessage(errorDiv, 'Please enter a valid level between 0 and 86 inches');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/tanks/${tankId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ level: level })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage(successDiv, `Tank ${tankId} updated to ${level} inches`);
+                    input.value = '';
+                    // Reload data to reflect changes
+                    await loadTankData();
+                } else {
+                    showMessage(errorDiv, data.error || 'Update failed');
+                }
+            } catch (error) {
+                console.error('Error updating tank:', error);
+                showMessage(errorDiv, 'Connection error: ' + error.message);
+            }
+        }
+
+        function showMessage(element, message) {
+            element.textContent = message;
+            element.style.display = 'block';
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 5000);
+        }
+
+        function showError(message) {
+            const status = document.getElementById('status');
+            status.textContent = '🔴 ' + message;
+            status.style.background = '#f8d7da';
+            status.style.color = '#721c24';
+            console.error('Fuel Farm Error:', message);
+        }
+
+        function formatDateTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString();
+        }
+
+        function updateStatus(status) {
+            const statusElement = document.getElementById('status');
+            if (status === 'connected') {
+                statusElement.textContent = '🟢 Connected';
+                statusElement.style.background = '#d4edda';
+                statusElement.style.color = '#155724';
+            }
+        }
+
+        function startRefreshCounter() {
+            refreshCountdown = 30;
+            updateRefreshCounter();
+            
+            countdownInterval = setInterval(() => {
+                refreshCountdown--;
+                updateRefreshCounter();
+                
+                if (refreshCountdown <= 0) {
+                    refreshCountdown = 30;
+                }
+            }, 1000);
+        }
+
+        function resetRefreshCounter() {
+            refreshCountdown = 30;
+            updateRefreshCounter();
+        }
+
+        function updateRefreshCounter() {
+            const counterElement = document.getElementById('refreshCounter');
+            counterElement.textContent = `Next refresh in: ${refreshCountdown}s`;
+        }
+
+        function handleEnterKey(event, tankId) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                updateTankLevel(tankId);
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -208,8 +208,8 @@
 
         .flight-info {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
             margin-bottom: 15px;
         }
 
@@ -295,7 +295,7 @@
             }
             
             .flight-info {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
             }
             
             .controls {
@@ -316,25 +316,11 @@
             </div>
         </div>
 
-        <div class="auth-form" id="authForm">
-            <h3 style="margin-bottom: 20px; color: #2c3e50;">QT Technologies Authentication</h3>
-            <div class="form-group">
-                <label for="username">Username:</label>
-                <input type="text" id="username" placeholder="Enter your username">
+        <div class="auth-form" id="authForm" style="display: none;">
+            <h3 style="margin-bottom: 20px; color: #2c3e50;">Authenticating to QT Technologies...</h3>
+            <div style="text-align: center; padding: 20px;">
+                <div class="loading" style="display: inline-block;">Connecting</div>
             </div>
-            <div class="form-group">
-                <label for="password">Password:</label>
-                <input type="password" id="password" placeholder="Enter your password">
-            </div>
-            <div class="form-group">
-                <label for="companyLocationId">Company Location ID:</label>
-                <input type="text" id="companyLocationId" value="ed63405a-8c05-ea11-803a-18a90577c142" placeholder="Company Location ID">
-            </div>
-            <div class="form-group">
-                <label for="userId">User ID:</label>
-                <input type="text" id="userId" value="ab14e958-7499-4534-a930-4ed1361c888e" placeholder="User ID">
-            </div>
-            <button class="btn btn-primary" onclick="authenticate()" style="width: 100%;">Authenticate</button>
         </div>
 
         <div id="errorMessage" class="error" style="display: none;"></div>
@@ -350,46 +336,68 @@
         let monitoringInterval;
         let authToken = null;
         let sessionData = null;
+        let CREDENTIALS = null;
 
-        // Configuration
-        const QT_BASE_URL = 'https://qttechnologies.com'; // You'll need to update this with the actual API endpoint
-        const POLL_INTERVAL = 30000; // 30 seconds
+        // Configuration - dynamically determine the proxy URL
+        const LOCAL_PROXY_URL = `${window.location.protocol}//${window.location.host}`;
+        const LOGIN_ENDPOINT = '/api/login';
+        const DISPATCH_ENDPOINT = '/api/dispatch';
+        let POLL_INTERVAL = 30000; // 30 seconds (will be updated from server config)
 
         // Authentication function
         async function authenticate() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const companyLocationId = document.getElementById('companyLocationId').value;
-            const userId = document.getElementById('userId').value;
-
-            if (!username || !password) {
-                showError('Please enter both username and password');
-                return;
-            }
-
             updateStatus('connecting');
+            document.getElementById('authForm').style.display = 'block';
             
             try {
-                // This is a placeholder for the actual authentication process
-                // You'll need to implement the actual QT Technologies authentication
+                // First, attempt to login via proxy server
+                const loginResponse = await fetch(`${LOCAL_PROXY_URL}${LOGIN_ENDPOINT}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: CREDENTIALS.username,
+                        password: CREDENTIALS.password
+                    })
+                });
                 
-                // For now, we'll simulate authentication and use the sample data
-                authToken = 'simulated-token';
-                sessionData = {
-                    companyLocationId: companyLocationId,
-                    userId: userId
-                };
+                const loginData = await loginResponse.json();
                 
-                updateStatus('connected');
-                document.getElementById('authForm').style.display = 'none';
-                showSuccess('Authentication successful!');
-                
-                // Load initial data
-                await fetchDispatchData();
+                if (loginResponse.ok && loginData.success) {
+                    authToken = 'authenticated';
+                    sessionData = {
+                        companyLocationId: CREDENTIALS.companyLocationId,
+                        userId: CREDENTIALS.userId
+                    };
+                    
+                    updateStatus('connected');
+                    document.getElementById('authForm').style.display = 'none';
+                    showSuccess('Authentication successful!');
+                    
+                    // Load initial data
+                    await fetchDispatchData();
+                } else {
+                    throw new Error(loginData.message || `Login failed with status: ${loginResponse.status}`);
+                }
                 
             } catch (error) {
+                console.error('Authentication error:', error);
                 updateStatus('disconnected');
-                showError('Authentication failed: ' + error.message);
+                document.getElementById('authForm').style.display = 'none';
+                showError('Authentication failed: ' + error.message + '. Proceeding with direct API access attempt.');
+                
+                // Fallback: try direct API access without explicit login
+                try {
+                    authToken = 'fallback';
+                    sessionData = {
+                        companyLocationId: CREDENTIALS.companyLocationId,
+                        userId: CREDENTIALS.userId
+                    };
+                    await fetchDispatchData();
+                } catch (fallbackError) {
+                    showError('Direct API access also failed: ' + fallbackError.message);
+                }
             }
         }
 
@@ -403,14 +411,11 @@
             try {
                 showLoading(true);
                 
-                // For demonstration, we'll use the sample data you provided
-                // In a real implementation, you would make an actual API call like:
-                /*
-                const response = await fetch(`${QT_BASE_URL}/api/GetDispatchDetail`, {
+                // Make API call via proxy server
+                const response = await fetch(`${LOCAL_PROXY_URL}${DISPATCH_ENDPOINT}`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         CompanyLocationID: sessionData.companyLocationId,
@@ -418,57 +423,31 @@
                     })
                 });
                 
-                const data = await response.json();
-                */
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 
-                // Using sample data for demonstration
-                const sampleData = {
-                    "Success": true,
-                    "Detail": {
-                        "Dispatches": [
-                            {
-                                "FlightNumber": "UA5941",
-                                "AirlineName": "UA/SkyWest Airlines",
-                                "TailNumber": "N779SK",
-                                "DepartureDate": "2025-06-24 17:25",
-                                "ArrivalDate": "2025-06-24 16:27",
-                                "Destination": "DEN",
-                                "AircraftType": "CR7",
-                                "FlightStatus": "In Flight",
-                                "Quantity": 1726.9,
-                                "QuantityInWeight": 11570,
-                                "Gate": "?",
-                                "TerminalNumber": "?",
-                                "TimeOnGround": "00:58"
-                            },
-                            {
-                                "FlightNumber": "AA3899",
-                                "AirlineName": "AA/Envoy Air",
-                                "TailNumber": "N293NN",
-                                "DepartureDate": "2025-06-25 05:38",
-                                "ArrivalDate": "2025-06-24 23:32",
-                                "Destination": "ORD",
-                                "AircraftType": "E75E",
-                                "FlightStatus": "In",
-                                "Quantity": 2826.9,
-                                "QuantityInWeight": 18940,
-                                "Gate": "3",
-                                "TerminalNumber": "A",
-                                "TimeOnGround": "06:06"
-                            }
-                        ]
-                    }
-                };
+                const data = await response.json();
 
-                if (sampleData.Success) {
-                    displayDispatchData(sampleData.Detail.Dispatches);
+                if (data.Success) {
+                    displayDispatchData(data.Detail.Dispatches);
                     updateLastUpdated();
                 } else {
-                    showError('Failed to fetch dispatch data');
+                    const errorMsg = data.ErrorMessage || 'Failed to fetch dispatch data';
+                    showError(errorMsg);
                 }
                 
             } catch (error) {
-                showError('Error fetching dispatch data: ' + error.message);
+                console.error('Fetch error:', error);
+                if (error.message.includes('Failed to fetch')) {
+                    showError('Connection Error: Unable to connect to proxy server. Make sure the proxy server is running.');
+                } else if (error.message.includes('403')) {
+                    // If we get a 403, try client-side authentication as fallback
+                    showError('Server authentication failed. Trying client-side authentication...');
+                    await authenticate();
+                } else {
+                    showError('Error fetching dispatch data: ' + error.message);
+                }
             } finally {
                 showLoading(false);
             }
@@ -531,7 +510,7 @@
                 
                 <div class="fuel-info">
                     <div class="fuel-quantity">
-                        ${dispatch.Quantity} gal (${dispatch.QuantityInWeight} lbs)
+                        ${dispatch.QuantityInWeight} lbs (${dispatch.Quantity} gal)
                     </div>
                 </div>
             `;
@@ -623,8 +602,44 @@
         }
 
         // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
+            updateStatus('connecting');
+            
+            // Get configuration from server FIRST
+            try {
+                const configResponse = await fetch(`${LOCAL_PROXY_URL}/api/config`);
+                const config = await configResponse.json();
+                
+                // Set credentials from server config
+                CREDENTIALS = {
+                    username: config.username,
+                    password: config.password,
+                    companyLocationId: config.companyLocationId,
+                    userId: config.userId
+                };
+                
+                // Set session data from server config BEFORE authentication
+                sessionData = {
+                    companyLocationId: config.companyLocationId,
+                    userId: config.userId
+                };
+                
+                // Update poll interval if provided
+                if (config.pollInterval) {
+                    POLL_INTERVAL = config.pollInterval;
+                }
+                
+                console.log('Configuration loaded:', sessionData);
+                
+            } catch (error) {
+                console.error('Failed to load config:', error);
+                showError('Failed to load configuration from server');
+                return;
+            }
+            
             updateStatus('disconnected');
+            // Now authenticate with proper session data
+            authenticate();
         });
     </script>
 </body>
