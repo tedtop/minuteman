@@ -485,26 +485,26 @@
             
             card.innerHTML = `
                 <div class="flight-header">
-                    <div class="flight-number">${dispatch.FlightNumber}</div>
+                    <div class="flight-number">${dispatch.FlightNumber} to ${dispatch.Destination}</div>
                     <div class="flight-status ${statusClass}">${dispatch.FlightStatus}</div>
                 </div>
                 
                 <div class="flight-info">
                     <div class="info-item">
-                        <div class="info-label">Airline</div>
-                        <div class="info-value">${dispatch.AirlineName}</div>
-                    </div>
-                    <div class="info-item">
                         <div class="info-label">Tail Number</div>
                         <div class="info-value">${dispatch.TailNumber}</div>
                     </div>
                     <div class="info-item">
-                        <div class="info-label">Departure</div>
-                        <div class="info-value">${formatDateTime(dispatch.DepartureDate)}</div>
+                        <div class="info-label">Airline</div>
+                        <div class="info-value">${dispatch.AirlineName}</div>
                     </div>
                     <div class="info-item">
-                        <div class="info-label">Destination</div>
-                        <div class="info-value">${dispatch.Destination}</div>
+                        <div class="info-label">Aircraft Type</div>
+                        <div class="info-value">${dispatch.AircraftType || 'N/A'}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Departure</div>
+                        <div class="info-value">${formatDateTime(dispatch.DepartureDate)}</div>
                     </div>
                 </div>
                 
