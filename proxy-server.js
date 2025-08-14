@@ -23,7 +23,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'fuel_dispatch_app.html'));
 });
 
-app.get('/fuel_dispatch_app', (req, res) => {
+app.get('/fuel_dispatch', (req, res) => {
     res.sendFile(path.join(__dirname, 'fuel_dispatch_app.html'));
 });
 
@@ -50,7 +50,7 @@ let fuelTanks = {
 async function authenticateOnStartup() {
     try {
         console.log('🔐 Authenticating to QT Technologies on server startup...');
-        
+
         // Step 1: Get login page and initial cookies
         const loginPageResponse = await fetch('https://go.qttechnologies.com/Portal/Account/Login', {
             method: 'GET',
@@ -71,7 +71,7 @@ async function authenticateOnStartup() {
             'Email': process.env.QT_USERNAME,
             'Password': process.env.QT_PASSWORD
         });
-        
+
         const response = await fetch('https://go.qttechnologies.com/Portal/Account/Login', {
             method: 'POST',
             headers: {
@@ -91,12 +91,12 @@ async function authenticateOnStartup() {
         if (loginCookies) {
             const cookieArray = Array.isArray(loginCookies) ? loginCookies : [loginCookies];
             const cookieParts = [];
-            
+
             for (const cookie of cookieArray) {
                 const cookieValue = cookie.split(';')[0];
                 cookieParts.push(cookieValue);
             }
-            
+
             const existingParts = cookieString ? cookieString.split(';').map(c => c.trim()) : [];
             const allParts = [...existingParts, ...cookieParts];
             sessionCookies = allParts.join('; ');
@@ -117,13 +117,13 @@ async function authenticateOnStartup() {
                         'Cookie': sessionCookies
                     }
                 });
-                
+
                 const redirectCookies = redirectResponse.headers.get('set-cookie');
                 if (redirectCookies) {
                     const additionalCookies = Array.isArray(redirectCookies) ? redirectCookies.join('; ') : redirectCookies;
                     sessionCookies = sessionCookies + '; ' + additionalCookies;
                 }
-                
+
                 // Step 5: Visit the dispatch list page to establish proper context
                 console.log('Step 5: Visiting dispatch list page to establish context...');
                 const dispatchListResponse = await fetch('https://go.qttechnologies.com/Portal/Dispatch/ListDispatch?view=tab', {
@@ -134,13 +134,13 @@ async function authenticateOnStartup() {
                         'Cookie': sessionCookies
                     }
                 });
-                
+
                 const finalCookies = dispatchListResponse.headers.get('set-cookie');
                 if (finalCookies) {
                     const moreCookies = Array.isArray(finalCookies) ? finalCookies.join('; ') : finalCookies;
                     sessionCookies = sessionCookies + '; ' + moreCookies;
                 }
-                
+
                 console.log('Dispatch list page status:', dispatchListResponse.status);
                 console.log('Context established for API calls');
             }
@@ -155,7 +155,7 @@ async function authenticateOnStartup() {
             console.log('❌ Server authentication failed with status:', response.status);
             return false;
         }
-        
+
     } catch (error) {
         console.error('❌ Server authentication error:', error.message);
         return false;
@@ -166,7 +166,7 @@ async function authenticateOnStartup() {
 app.post('/api/login', async (req, res) => {
     try {
         console.log('Step 1: Getting login page to extract tokens...');
-        
+
         // First, get the login page to extract any required tokens
         const loginPageResponse = await fetch('https://go.qttechnologies.com/Portal/Account/Login', {
             method: 'GET',
@@ -185,7 +185,7 @@ app.post('/api/login', async (req, res) => {
         }
 
         const loginPageHtml = await loginPageResponse.text();
-        
+
         // Extract CSRF token if present
         let csrfToken = '';
         const tokenMatch = loginPageHtml.match(/<input[^>]*name="__RequestVerificationToken"[^>]*value="([^"]*)"[^>]*>/i);
@@ -195,16 +195,16 @@ app.post('/api/login', async (req, res) => {
         }
 
         console.log('Step 2: Attempting login with extracted tokens...');
-        
+
         const formData = new URLSearchParams({
             'Email': process.env.QT_USERNAME,
             'Password': process.env.QT_PASSWORD
         });
-        
+
         if (csrfToken) {
             formData.append('__RequestVerificationToken', csrfToken);
         }
-        
+
         const response = await fetch('https://go.qttechnologies.com/Portal/Account/Login', {
             method: 'POST',
             headers: {
@@ -224,19 +224,19 @@ app.post('/api/login', async (req, res) => {
         if (loginCookies) {
             const cookieArray = Array.isArray(loginCookies) ? loginCookies : [loginCookies];
             const cookieParts = [];
-            
+
             // Parse cookies properly (only take the name=value part, ignore path, expires, etc.)
             for (const cookie of cookieArray) {
                 const cookieName = cookie.split('=')[0];
                 const cookieValue = cookie.split(';')[0]; // Get just name=value part
                 cookieParts.push(cookieValue);
             }
-            
+
             // Combine with existing cookies
             const existingParts = cookieString ? cookieString.split(';').map(c => c.trim()) : [];
             const allParts = [...existingParts, ...cookieParts];
             sessionCookies = allParts.join('; ');
-            
+
             console.log('Login cookies updated:', sessionCookies.substring(0, 150) + '...');
         } else {
             sessionCookies = cookieString;
@@ -244,17 +244,17 @@ app.post('/api/login', async (req, res) => {
 
         console.log('Login response status:', response.status);
         console.log('Login response headers:', Object.fromEntries(response.headers.entries()));
-        
+
         // Check what the login response actually contains
         const loginResponseText = await response.text();
         console.log('Login response body length:', loginResponseText.length);
-        
+
         // Check if login failed (look for error indicators)
-        const hasError = loginResponseText.includes('validation-summary-errors') || 
-                        loginResponseText.includes('login-error') ||
-                        loginResponseText.includes('Invalid') ||
-                        loginResponseText.includes('incorrect');
-        
+        const hasError = loginResponseText.includes('validation-summary-errors') ||
+            loginResponseText.includes('login-error') ||
+            loginResponseText.includes('Invalid') ||
+            loginResponseText.includes('incorrect');
+
         console.log('Login response contains error indicators:', hasError);
         if (hasError) {
             // Extract error message if present
@@ -263,13 +263,13 @@ app.post('/api/login', async (req, res) => {
                 console.log('Login error message:', errorMatch[1].replace(/<[^>]*>/g, '').trim());
             }
         }
-        
+
         // Check if login was successful (usually a redirect)
         if (response.status === 302 || (response.status === 200 && !hasError)) {
             const location = response.headers.get('location');
             if (location) {
                 console.log('Login redirect to:', location);
-                
+
                 // Follow the redirect to complete the login process
                 console.log('Step 3: Following login redirect...');
                 const redirectUrl = location.startsWith('http') ? location : 'https://go.qttechnologies.com' + location;
@@ -282,7 +282,7 @@ app.post('/api/login', async (req, res) => {
                         'Cookie': sessionCookies
                     }
                 });
-                
+
                 // Get any additional cookies from the redirect
                 const redirectCookies = redirectResponse.headers.get('set-cookie');
                 if (redirectCookies) {
@@ -290,7 +290,7 @@ app.post('/api/login', async (req, res) => {
                     sessionCookies = sessionCookies + '; ' + additionalCookies;
                     console.log('Additional cookies from redirect:', additionalCookies);
                 }
-                
+
                 console.log('Redirect response status:', redirectResponse.status);
                 console.log('Final session cookies length:', sessionCookies.length);
             }
@@ -313,7 +313,7 @@ app.post('/api/dispatch', async (req, res) => {
         console.log('Fetching dispatch data...');
         console.log('Request body:', JSON.stringify(req.body, null, 2));
         console.log('Using cookies:', sessionCookies ? sessionCookies.substring(0, 100) + '...' : 'None');
-        
+
         const response = await fetch('https://go.qttechnologies.com/Portal/Dispatch/GetDispatchDetail', {
             method: 'POST',
             headers: {
@@ -339,7 +339,7 @@ app.post('/api/dispatch', async (req, res) => {
 
         console.log('Dispatch API response status:', response.status);
         console.log('Dispatch API response headers:', Object.fromEntries(response.headers.entries()));
-        
+
         if (response.ok) {
             const data = await response.json();
             console.log('Dispatch data received, number of dispatches:', data.Detail?.Dispatches?.length || 0);
@@ -347,22 +347,22 @@ app.post('/api/dispatch', async (req, res) => {
         } else {
             const errorText = await response.text();
             console.error('API Error Response:', errorText.substring(0, 500) + '...');
-            res.status(response.status).json({ 
-                Success: false, 
-                ErrorMessage: `API request failed with status ${response.status}. Response: ${errorText.substring(0, 200)}` 
+            res.status(response.status).json({
+                Success: false,
+                ErrorMessage: `API request failed with status ${response.status}. Response: ${errorText.substring(0, 200)}`
             });
         }
     } catch (error) {
         console.error('Dispatch fetch error:', error);
-        res.status(500).json({ 
-            Success: false, 
-            ErrorMessage: error.message 
+        res.status(500).json({
+            Success: false,
+            ErrorMessage: error.message
         });
     }
 });
 
 // Debug endpoint to examine login page
-app.get('/api/debug-login', async (req, res) => {
+app.get('/api/debug_login', async (req, res) => {
     try {
         const response = await fetch('https://go.qttechnologies.com/Portal/Account/Login', {
             method: 'GET',
@@ -371,9 +371,9 @@ app.get('/api/debug-login', async (req, res) => {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
             }
         });
-        
+
         const html = await response.text();
-        
+
         // Extract all input fields
         const inputFields = [];
         const inputRegex = /<input[^>]*>/gi;
@@ -381,7 +381,7 @@ app.get('/api/debug-login', async (req, res) => {
         while ((match = inputRegex.exec(html)) !== null) {
             inputFields.push(match[0]);
         }
-        
+
         res.json({
             status: response.status,
             headers: Object.fromEntries(response.headers.entries()),
@@ -400,19 +400,19 @@ app.get('/api/debug-login', async (req, res) => {
 });
 
 // Test authenticated access to different endpoints
-app.get('/api/test-auth', async (req, res) => {
+app.get('/api/test_auth', async (req, res) => {
     try {
         if (!sessionCookies || !isAuthenticated) {
-            return res.json({ 
+            return res.json({
                 error: 'No session cookies available. Run login first.',
                 isAuthenticated: isAuthenticated,
                 hasCookies: !!sessionCookies,
                 cookieLength: sessionCookies.length
             });
         }
-        
+
         console.log('Testing authenticated access to different endpoints...');
-        
+
         // Test access to main portal
         const portalResponse = await fetch('https://go.qttechnologies.com/Portal/', {
             method: 'GET',
@@ -422,7 +422,7 @@ app.get('/api/test-auth', async (req, res) => {
                 'Cookie': sessionCookies
             }
         });
-        
+
         // Test access to dispatch list page
         const dispatchListResponse = await fetch('https://go.qttechnologies.com/Portal/Dispatch/ListDispatch', {
             method: 'GET',
@@ -432,10 +432,10 @@ app.get('/api/test-auth', async (req, res) => {
                 'Cookie': sessionCookies
             }
         });
-        
+
         const portalText = await portalResponse.text();
         const dispatchText = await dispatchListResponse.text();
-        
+
         res.json({
             sessionCookiesLength: sessionCookies.length,
             portalAccess: {
@@ -455,17 +455,17 @@ app.get('/api/test-auth', async (req, res) => {
                 titleContains: dispatchText.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || 'No title'
             }
         });
-        
+
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
 // Test credentials endpoint
-app.get('/api/test-credentials', async (req, res) => {
+app.get('/api/test_credentials', async (req, res) => {
     try {
         console.log('Testing credentials from environment variables...');
-        
+
         // Try a simple login test
         const response = await fetch('https://go.qttechnologies.com/Portal/Account/Login', {
             method: 'POST',
@@ -480,9 +480,9 @@ app.get('/api/test-credentials', async (req, res) => {
             }),
             redirect: 'manual'
         });
-        
+
         const responseText = await response.text();
-        
+
         res.json({
             status: response.status,
             redirectLocation: response.headers.get('location'),
@@ -496,7 +496,7 @@ app.get('/api/test-credentials', async (req, res) => {
                 accessDenied: responseText.includes('Access') && responseText.includes('denied')
             }
         });
-        
+
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -514,14 +514,14 @@ app.get('/api/config', (req, res) => {
 });
 
 // Check authentication status
-app.get('/api/auth-status', (req, res) => {
-    res.json({ 
+app.get('/api/auth_status', (req, res) => {
+    res.json({
         isAuthenticated: isAuthenticated,
         hasCookies: !!sessionCookies,
         cookieLength: sessionCookies.length,
         cookiePreview: sessionCookies ? sessionCookies.substring(0, 100) + '...' : 'None',
         username: process.env.QT_USERNAME,
-        recommendation: isAuthenticated && sessionCookies ? 
+        recommendation: isAuthenticated && sessionCookies ?
             "✅ Authentication successful. If getting 403 errors, this indicates the user account lacks permissions to access the dispatch API. Contact QT Technologies to verify account permissions." :
             "❌ Authentication failed. Check credentials."
     });
@@ -530,7 +530,7 @@ app.get('/api/auth-status', (req, res) => {
 // Fuel Farm API Endpoints
 
 // Get all tank levels
-app.get('/api/fuel-farm/tanks', (req, res) => {
+app.get('/api/fuel_farm/tanks', (req, res) => {
     res.json({
         success: true,
         tanks: fuelTanks,
@@ -539,26 +539,26 @@ app.get('/api/fuel-farm/tanks', (req, res) => {
 });
 
 // Update tank level
-app.post('/api/fuel-farm/tanks/:tankId', (req, res) => {
+app.post('/api/fuel_farm/tanks/:tankId', (req, res) => {
     const { tankId } = req.params;
     const { level } = req.body;
-    
+
     if (!fuelTanks[tankId]) {
         return res.status(404).json({ success: false, error: 'Tank not found' });
     }
-    
+
     if (typeof level !== 'number' || level < 0 || level > fuelTanks[tankId].maxLevel) {
-        return res.status(400).json({ 
-            success: false, 
-            error: `Level must be between 0 and ${fuelTanks[tankId].maxLevel} inches` 
+        return res.status(400).json({
+            success: false,
+            error: `Level must be between 0 and ${fuelTanks[tankId].maxLevel} inches`
         });
     }
-    
+
     fuelTanks[tankId].level = level;
     fuelTanks[tankId].lastUpdated = new Date().toISOString();
-    
+
     console.log(`Tank ${tankId} level updated to ${level} inches`);
-    
+
     res.json({
         success: true,
         tank: fuelTanks[tankId],
@@ -573,16 +573,16 @@ app.get('/api/health', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Proxy server starting on port ${PORT}...`);
-    
+
     // Authenticate on startup
     const authSuccess = await authenticateOnStartup();
-    
+
     if (authSuccess) {
         console.log(`\n✅ Server ready and authenticated!`);
         console.log(`📱 Local access:`);
-        console.log(`   - Fuel Dispatch: http://localhost:${PORT}/fuel_dispatch_app.html`);
+        console.log(`   - Fuel Dispatch: http://localhost:${PORT}/fuel_dispatch`);
         console.log(`   - Fuel Farm: http://localhost:${PORT}/fuel_farm`);
-        
+
         // Try to show the actual IP address
         const os = require('os');
         const networkInterfaces = os.networkInterfaces();
@@ -591,7 +591,7 @@ app.listen(PORT, '0.0.0.0', async () => {
             for (const iface of interfaces) {
                 if (iface.family === 'IPv4' && !iface.internal) {
                     console.log(`  - ${name}:`);
-                    console.log(`    • Fuel Dispatch: http://${iface.address}:${PORT}/fuel_dispatch_app.html`);
+                    console.log(`    • Fuel Dispatch: http://${iface.address}:${PORT}/fuel_dispatch`);
                     console.log(`    • Fuel Farm: http://${iface.address}:${PORT}/fuel_farm`);
                 }
             }

@@ -278,22 +278,22 @@
                 gap: 15px;
                 padding: 5px;
             }
-            
+
             .tank-card {
                 flex: 0 0 140px;
                 min-width: 140px;
                 padding: 15px;
             }
-            
+
             .tank-visual {
                 width: 60px;
                 height: 150px;
             }
-            
+
             .tank-name {
                 font-size: 20px;
             }
-            
+
             .current-level {
                 font-size: 24px;
             }
@@ -313,7 +313,7 @@
     </div>
 
     <script>
-        const API_BASE_URL = `${window.location.protocol}//${window.location.host}/api/fuel-farm`;
+        const API_BASE_URL = `${window.location.protocol}//${window.location.host}/api/fuel_farm`;
         let tanks = {};
         let refreshCountdown = 30;
         let countdownInterval;
@@ -493,11 +493,11 @@
         function startRefreshCounter() {
             refreshCountdown = 30;
             updateRefreshCounter();
-            
+
             countdownInterval = setInterval(() => {
                 refreshCountdown--;
                 updateRefreshCounter();
-                
+
                 if (refreshCountdown <= 0) {
                     refreshCountdown = 30;
                 }
