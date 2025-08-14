@@ -5,60 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fuel Farm Monitor</title>
+    <link rel="stylesheet" href="common.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            min-height: 100vh;
-            color: #333;
-            padding: 20px;
-        }
-
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 30px;
-            text-align: center;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-
-        .header h1 {
-            color: #2c3e50;
-            font-size: 28px;
-            margin-bottom: 10px;
-        }
-
-        .status {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 10px;
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .refresh-counter {
-            display: inline-block;
-            padding: 6px 12px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: 500;
-            margin-left: 10px;
-            background: rgba(0, 123, 255, 0.1);
-            color: #007bff;
-            border: 1px solid rgba(0, 123, 255, 0.2);
-        }
+        /* Tank-specific styles */
 
 
         .tanks-container {
@@ -253,25 +202,6 @@
             margin-top: 10px;
         }
 
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 10px;
-            font-size: 12px;
-            display: none;
-        }
-
-        .success {
-            background: #d4edda;
-            color: #155724;
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 10px;
-            font-size: 12px;
-            display: none;
-        }
 
         @media (max-width: 768px) {
             .tanks-container {
@@ -302,14 +232,18 @@
 </head>
 
 <body>
-    <div class="header">
-        <h1>⛽ Fuel Farm Levels</h1>
-        <div class="status" id="status">🟢 Connected</div>
-        <div class="refresh-counter" id="refreshCounter">Next refresh in: 30s</div>
-    </div>
+    <div class="container">
+        <div class="header">
+            <h1>⛽ Fuel Farm Levels</h1>
+            <div class="status connected" id="status">🟢 Next refresh in 30s</div>
+            <div class="nav-buttons">
+                <a href="/fuel_dispatch">✈️ Fuel Dispatch</a>
+            </div>
+        </div>
 
-    <div class="tanks-container" id="tanksContainer">
-        <!-- Tanks will be populated by JavaScript -->
+        <div class="tanks-container" id="tanksContainer">
+            <!-- Tanks will be populated by JavaScript -->
+        </div>
     </div>
 
     <script>
@@ -337,7 +271,7 @@
                 if (data.success) {
                     tanks = data.tanks;
                     renderTanks();
-                    updateStatus('connected', data.dbConnected);
+                    updateStatus(data.dbConnected);
                 } else {
                     showError('Failed to load tank data');
                 }
@@ -399,8 +333,6 @@
                             Update
                         </button>
                     </div>
-                    <div class="error" id="error-${tankId}"></div>
-                    <div class="success" id="success-${tankId}"></div>
                     <div class="last-updated">
                         Updated: ${formatDateTime(tank.lastUpdated)}
                     </div>
@@ -422,16 +354,11 @@
 
         async function updateTankLevel(tankId) {
             const input = document.getElementById(`input-${tankId}`);
-            const errorDiv = document.getElementById(`error-${tankId}`);
-            const successDiv = document.getElementById(`success-${tankId}`);
             const level = parseFloat(input.value);
 
-            // Clear previous messages
-            errorDiv.style.display = 'none';
-            successDiv.style.display = 'none';
-
-            if (isNaN(level) || level < 0 || level > 86) {
-                showMessage(errorDiv, 'Please enter a valid level between 0 and 86 inches');
+            // Basic validation  
+            if (isNaN(level) || level < 0) {
+                console.warn(`Invalid level for ${tankId}: ${input.value}`);
                 return;
             }
 
@@ -447,37 +374,27 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showMessage(successDiv, `Tank ${tankId} updated to ${level} inches`);
                     input.value = '';
                     // Reload data to reflect changes
                     await loadTankData();
                 } else {
-                    if (response.status === 503) {
-                        showMessage(errorDiv, 'Database offline - reading not saved: ' + (data.error || 'Service unavailable'));
-                    } else {
-                        showMessage(errorDiv, data.error || 'Update failed');
-                    }
+                    console.error(`Tank update failed for ${tankId}:`, data.error || 'Unknown error');
                 }
             } catch (error) {
-                console.error('Error updating tank:', error);
-                showMessage(errorDiv, 'Connection error: ' + error.message);
+                console.error(`Connection error updating tank ${tankId}:`, error.message);
             }
         }
 
-        function showMessage(element, message) {
-            element.textContent = message;
-            element.style.display = 'block';
-            setTimeout(() => {
-                element.style.display = 'none';
-            }, 5000);
-        }
 
         function showError(message) {
             const status = document.getElementById('status');
             status.textContent = '🔴 ' + message;
-            status.style.background = '#f8d7da';
-            status.style.color = '#721c24';
+            status.className = 'status disconnected';
             console.error('Fuel Farm Error:', message);
+            // Stop the countdown when there's an error
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
         }
 
         function formatDateTime(isoString) {
@@ -487,14 +404,16 @@
 
         function updateStatus(dbConnected) {
             const statusElement = document.getElementById('status');
-            if (dbConnected) {
-                statusElement.textContent = '🟢 Connected';
-                statusElement.style.background = '#d4edda';
-                statusElement.style.color = '#155724';
-            } else {
+            if (!dbConnected) {
                 statusElement.textContent = '🔴 Database Offline';
-                statusElement.style.background = '#f8d7da';
-                statusElement.style.color = '#721c24';
+                statusElement.className = 'status disconnected';
+                // Stop the countdown when database is offline
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                }
+            } else {
+                // Database is connected, let the countdown continue
+                statusElement.className = 'status connected';
             }
         }
 
@@ -518,8 +437,9 @@
         }
 
         function updateRefreshCounter() {
-            const counterElement = document.getElementById('refreshCounter');
-            counterElement.textContent = `Next refresh in: ${refreshCountdown}s`;
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = `🟢 Next refresh in ${refreshCountdown}s`;
+            statusElement.className = 'status connected';
         }
 
         function handleEnterKey(event, tankId) {
