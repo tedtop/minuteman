@@ -67,6 +67,19 @@
             border: 1px solid #ffeaa7;
         }
 
+        .status.connecting::after {
+            content: '';
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            margin-left: 8px;
+            border: 2px solid #856404;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            vertical-align: middle;
+        }
+
         .controls {
             display: flex;
             gap: 10px;
@@ -308,12 +321,7 @@
     <div class="container">
         <div class="header">
             <h1>🛫 Fuel Dispatch Monitor</h1>
-            <div class="status" id="status">Disconnected</div>
-            <div class="controls">
-                <button class="btn btn-primary" onclick="startMonitoring()">Start Monitoring</button>
-                <button class="btn btn-secondary" onclick="stopMonitoring()">Stop Monitoring</button>
-                <button class="btn btn-secondary" onclick="refreshData()">Refresh</button>
-            </div>
+            <div class="status" id="status">Connecting...</div>
         </div>
 
         <div class="auth-form" id="authForm" style="display: none;">
@@ -371,12 +379,14 @@
                         userId: qtCredentials.userId
                     };
                     
-                    updateStatus('connected');
                     document.getElementById('authForm').style.display = 'none';
                     showSuccess('Authentication successful!');
                     
                     // Load initial data
                     await fetchDispatchData();
+                    
+                    // Start automatic refresh countdown
+                    startRefreshCountdown();
                 } else {
                     throw new Error(loginData.message || `Login failed with status: ${loginResponse.status}`);
                 }
@@ -385,19 +395,7 @@
                 console.error('Authentication error:', error);
                 updateStatus('disconnected');
                 document.getElementById('authForm').style.display = 'none';
-                showError('Authentication failed: ' + error.message + '. Proceeding with direct API access attempt.');
-                
-                // Fallback: try direct API access without explicit login
-                try {
-                    qtCookies = null; // No cookies available in fallback
-                    qtSessionData = {
-                        companyLocationId: qtCredentials.companyLocationId,
-                        userId: qtCredentials.userId
-                    };
-                    await fetchDispatchData();
-                } catch (fallbackError) {
-                    showError('Direct API access also failed: ' + fallbackError.message);
-                }
+                showError('Authentication failed: ' + error.message);
             }
         }
 
@@ -542,21 +540,39 @@
             return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         }
 
-        function updateStatus(status) {
+        let refreshCountdown = 30;
+        let countdownInterval;
+
+        function updateStatus(status, message = null) {
             const statusElement = document.getElementById('status');
             statusElement.className = 'status ' + status;
             
             switch(status) {
                 case 'connected':
-                    statusElement.textContent = '🟢 Connected';
+                    statusElement.textContent = message || '🟢 Connected';
                     break;
                 case 'connecting':
-                    statusElement.textContent = '🟡 Connecting...';
+                    statusElement.textContent = message || '🟡 Connecting...';
                     break;
                 case 'disconnected':
-                    statusElement.textContent = '🔴 Disconnected';
+                    statusElement.textContent = message || '🔴 Disconnected';
                     break;
             }
+        }
+
+        function startRefreshCountdown() {
+            refreshCountdown = 30;
+            if (countdownInterval) clearInterval(countdownInterval);
+            
+            countdownInterval = setInterval(() => {
+                refreshCountdown--;
+                updateStatus('connected', `🟢 Next refresh in ${refreshCountdown}s`);
+                
+                if (refreshCountdown <= 0) {
+                    refreshCountdown = 30;
+                    fetchDispatchData();
+                }
+            }, 1000);
         }
 
         function showError(message) {
