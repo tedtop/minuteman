@@ -337,7 +337,7 @@
                 if (data.success) {
                     tanks = data.tanks;
                     renderTanks();
-                    updateStatus('connected');
+                    updateStatus('connected', data.dbConnected);
                 } else {
                     showError('Failed to load tank data');
                 }
@@ -452,7 +452,11 @@
                     // Reload data to reflect changes
                     await loadTankData();
                 } else {
-                    showMessage(errorDiv, data.error || 'Update failed');
+                    if (response.status === 503) {
+                        showMessage(errorDiv, 'Database offline - reading not saved: ' + (data.error || 'Service unavailable'));
+                    } else {
+                        showMessage(errorDiv, data.error || 'Update failed');
+                    }
                 }
             } catch (error) {
                 console.error('Error updating tank:', error);
@@ -481,12 +485,22 @@
             return date.toLocaleString();
         }
 
-        function updateStatus(status) {
+        function updateStatus(status, dbConnected = false) {
             const statusElement = document.getElementById('status');
             if (status === 'connected') {
-                statusElement.textContent = '🟢 Connected';
-                statusElement.style.background = '#d4edda';
-                statusElement.style.color = '#155724';
+                if (dbConnected) {
+                    statusElement.textContent = '🟢 Connected (Database: Active)';
+                    statusElement.style.background = '#d4edda';
+                    statusElement.style.color = '#155724';
+                } else {
+                    statusElement.textContent = '🟡 Connected (Database: Offline)';
+                    statusElement.style.background = '#fff3cd';
+                    statusElement.style.color = '#856404';
+                }
+            } else {
+                statusElement.textContent = '🔴 Disconnected';
+                statusElement.style.background = '#f8d7da';
+                statusElement.style.color = '#721c24';
             }
         }
 

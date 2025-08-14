@@ -3,6 +3,7 @@ const cors = require('cors');
 const fetch = require('node-fetch');
 const path = require('path');
 require('dotenv').config();
+const fuelFarmDB = require('./supabase-db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,15 +36,15 @@ app.get('/fuel_farm', (req, res) => {
 let sessionCookies = '';
 let isAuthenticated = false;
 
-// Fuel Farm tank data storage (in production, use a database)
-let fuelTanks = {
-    T1: { level: 30, maxLevel: 86, fuelType: 'Avgas', lastUpdated: '2025-07-30T09:00:00.000Z' },
-    T2: { level: 23.5, maxLevel: 86, fuelType: 'Jet A', lastUpdated: '2025-07-30T09:00:00.000Z' },
-    T3: { level: 26.5, maxLevel: 86, fuelType: 'Jet A', lastUpdated: '2025-07-30T09:00:00.000Z' },
-    T4: { level: 17.5, maxLevel: 86, fuelType: 'Jet A', lastUpdated: '2025-07-30T09:00:00.000Z' },
-    T5: { level: 14.5, maxLevel: 86, fuelType: 'Jet A', lastUpdated: '2025-07-30T09:00:00.000Z' },
-    T6: { level: 12, maxLevel: 86, fuelType: 'Jet A', lastUpdated: '2025-07-30T09:00:00.000Z' },
-    T7: { level: 56, maxLevel: 86, fuelType: 'Jet A', lastUpdated: '2025-07-30T09:00:00.000Z' }
+// Fuel Farm tank configuration (stored in application code)
+const tankConfig = {
+    T1: { maxLevel: 86, fuelType: 'Avgas', capacity: 12000, name: 'Tank 1' },
+    T2: { maxLevel: 86, fuelType: 'Jet A', capacity: 12000, name: 'Tank 2' },
+    T3: { maxLevel: 86, fuelType: 'Jet A', capacity: 12000, name: 'Tank 3' },
+    T4: { maxLevel: 86, fuelType: 'Jet A', capacity: 12000, name: 'Tank 4' },
+    T5: { maxLevel: 86, fuelType: 'Jet A', capacity: 12000, name: 'Tank 5' },
+    T6: { maxLevel: 86, fuelType: 'Jet A', capacity: 12000, name: 'Tank 6' },
+    T7: { maxLevel: 97, fuelType: 'Jet A', capacity: 18034, name: 'Tank 7' }
 };
 
 // Authenticate on server startup
@@ -530,40 +531,108 @@ app.get('/api/auth_status', (req, res) => {
 // Fuel Farm API Endpoints
 
 // Get all tank levels
-app.get('/api/fuel_farm/tanks', (req, res) => {
-    res.json({
-        success: true,
-        tanks: fuelTanks,
-        timestamp: new Date().toISOString()
-    });
+// Get all tank levels (combines config from app with latest readings from database)
+app.get('/api/fuel_farm/tanks', async (req, res) => {
+    try {
+        const dbConnected = fuelFarmDB.isConnected();
+        let tanks = {};
+        
+        // Create tank objects from config
+        for (const [tankId, config] of Object.entries(tankConfig)) {
+            tanks[tankId] = {
+                level: 0, // default when no readings
+                maxLevel: config.maxLevel,
+                fuelType: config.fuelType,
+                capacity: config.capacity,
+                name: config.name,
+                lastUpdated: null
+            };
+        }
+
+        if (dbConnected) {
+            try {
+                // Get latest readings from database
+                const latestReadings = await fuelFarmDB.getLatestReadings();
+                
+                // Merge readings with config
+                latestReadings.forEach(reading => {
+                    if (tanks[reading.tank_id]) {
+                        tanks[reading.tank_id].level = reading.level;
+                        tanks[reading.tank_id].lastUpdated = reading.recorded_at;
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to get latest readings:', error);
+                // Continue with default levels
+            }
+        }
+
+        res.json({
+            success: true,
+            tanks: tanks,
+            dbConnected: dbConnected,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error in /api/fuel_farm/tanks:', error);
+        res.status(500).json({ success: false, error: 'Server error' });
+    }
 });
 
 // Update tank level
-app.post('/api/fuel_farm/tanks/:tankId', (req, res) => {
+app.post('/api/fuel_farm/tanks/:tankId', async (req, res) => {
     const { tankId } = req.params;
     const { level } = req.body;
 
-    if (!fuelTanks[tankId]) {
-        return res.status(404).json({ success: false, error: 'Tank not found' });
-    }
+    try {
+        // Validate tank exists in config
+        if (!tankConfig[tankId]) {
+            return res.status(404).json({ success: false, error: 'Tank not found' });
+        }
 
-    if (typeof level !== 'number' || level < 0 || level > fuelTanks[tankId].maxLevel) {
-        return res.status(400).json({
+        const tank = tankConfig[tankId];
+
+        // Validate level
+        if (typeof level !== 'number' || level < 0 || level > tank.maxLevel) {
+            return res.status(400).json({
+                success: false,
+                error: `Level must be between 0 and ${tank.maxLevel} inches`
+            });
+        }
+
+        // Check database connection
+        if (!fuelFarmDB.isConnected()) {
+            return res.status(503).json({
+                success: false,
+                error: 'Database not available. Cannot persist reading.'
+            });
+        }
+
+        // Record in database
+        await fuelFarmDB.recordTankLevel(tankId, level);
+
+        // Return updated tank info
+        const updatedTank = {
+            level: level,
+            maxLevel: tank.maxLevel,
+            fuelType: tank.fuelType,
+            capacity: tank.capacity,
+            name: tank.name,
+            lastUpdated: new Date().toISOString()
+        };
+
+        res.json({
+            success: true,
+            tank: updatedTank,
+            message: `Tank ${tankId} updated successfully`
+        });
+    } catch (error) {
+        console.error('Error updating tank level:', error);
+        res.status(500).json({
             success: false,
-            error: `Level must be between 0 and ${fuelTanks[tankId].maxLevel} inches`
+            error: 'Failed to update tank level: ' + error.message
         });
     }
-
-    fuelTanks[tankId].level = level;
-    fuelTanks[tankId].lastUpdated = new Date().toISOString();
-
-    console.log(`Tank ${tankId} level updated to ${level} inches`);
-
-    res.json({
-        success: true,
-        tank: fuelTanks[tankId],
-        message: `Tank ${tankId} updated successfully`
-    });
 });
 
 // Health check endpoint
@@ -573,6 +642,15 @@ app.get('/api/health', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Proxy server starting on port ${PORT}...`);
+
+    // Test database connection
+    console.log('🗄️ Testing Supabase connection...');
+    const dbConnected = await fuelFarmDB.testConnection();
+    if (dbConnected) {
+        console.log('✅ Supabase connected successfully');
+    } else {
+        console.log('⚠️ Supabase not available - fuel farm will show connection status');
+    }
 
     // Authenticate on startup
     const authSuccess = await authenticateOnStartup();
