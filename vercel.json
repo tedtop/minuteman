@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/fuel_dispatch.html"
+    },
+    {
+      "source": "/fuel_dispatch",
+      "destination": "/fuel_dispatch.html"
+    },
+    {
+      "source": "/fuel_farm",
+      "destination": "/fuel_farm.html"
+    }
+  ]
+}

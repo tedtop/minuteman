@@ -334,15 +334,15 @@
     <script>
         let isMonitoring = false;
         let monitoringInterval;
-        let authToken = null;
-        let sessionData = null;
-        let CREDENTIALS = null;
+        let qtCookies = null;        // QT authentication cookies
+        let qtCredentials = null;    // QT username/password from config  
+        let qtSessionData = null;    // QT company/user IDs for API calls
 
         // Configuration - dynamically determine the proxy URL
         const LOCAL_PROXY_URL = `${window.location.protocol}//${window.location.host}`;
         const LOGIN_ENDPOINT = '/api/login';
         const DISPATCH_ENDPOINT = '/api/dispatch';
-        let POLL_INTERVAL = 30000; // 30 seconds (will be updated from server config)
+        const POLL_INTERVAL = 30000; // 30 seconds
 
         // Authentication function
         async function authenticate() {
@@ -357,18 +357,18 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        username: CREDENTIALS.username,
-                        password: CREDENTIALS.password
+                        username: qtCredentials.username,
+                        password: qtCredentials.password
                     })
                 });
                 
                 const loginData = await loginResponse.json();
                 
                 if (loginResponse.ok && loginData.success) {
-                    authToken = 'authenticated';
-                    sessionData = {
-                        companyLocationId: CREDENTIALS.companyLocationId,
-                        userId: CREDENTIALS.userId
+                    qtCookies = loginData.qtCookies;
+                    qtSessionData = {
+                        companyLocationId: qtCredentials.companyLocationId,
+                        userId: qtCredentials.userId
                     };
                     
                     updateStatus('connected');
@@ -389,10 +389,10 @@
                 
                 // Fallback: try direct API access without explicit login
                 try {
-                    authToken = 'fallback';
-                    sessionData = {
-                        companyLocationId: CREDENTIALS.companyLocationId,
-                        userId: CREDENTIALS.userId
+                    qtCookies = null; // No cookies available in fallback
+                    qtSessionData = {
+                        companyLocationId: qtCredentials.companyLocationId,
+                        userId: qtCredentials.userId
                     };
                     await fetchDispatchData();
                 } catch (fallbackError) {
@@ -403,7 +403,7 @@
 
         // Fetch dispatch data from QT Technologies
         async function fetchDispatchData() {
-            if (!authToken) {
+            if (!qtSessionData) {
                 showError('Please authenticate first');
                 return;
             }
@@ -415,16 +415,33 @@
                 const response = await fetch(`${LOCAL_PROXY_URL}${DISPATCH_ENDPOINT}`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'QT-Cookies': qtCookies || ''
                     },
                     body: JSON.stringify({
-                        CompanyLocationID: sessionData.companyLocationId,
-                        UserID: sessionData.userId
+                        CompanyLocationID: qtSessionData.companyLocationId,
+                        UserID: qtSessionData.userId
                     })
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    if (response.status === 401) {
+                        // QT session expired, try to re-authenticate
+                        console.log('QT session expired, re-authenticating...');
+                        await authenticate();
+                        return; // authenticate() will call fetchDispatchData() again
+                    }
+                    
+                    // Show complete server error for internal tool troubleshooting
+                    const errorText = await response.text();
+                    let serverError;
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        serverError = errorData.error || errorData.message || errorText;
+                    } catch {
+                        serverError = errorText;
+                    }
+                    throw new Error(`Server Error ${response.status}: ${serverError}`);
                 }
                 
                 const data = await response.json();
@@ -569,7 +586,7 @@
         function startMonitoring() {
             if (isMonitoring) return;
             
-            if (!authToken) {
+            if (!qtSessionData) {
                 showError('Please authenticate first');
                 return;
             }
@@ -594,7 +611,7 @@
         }
 
         function refreshData() {
-            if (authToken) {
+            if (qtSessionData) {
                 fetchDispatchData();
             } else {
                 showError('Please authenticate first');
@@ -610,26 +627,23 @@
                 const configResponse = await fetch(`${LOCAL_PROXY_URL}/api/config`);
                 const config = await configResponse.json();
                 
-                // Set credentials from server config
-                CREDENTIALS = {
+                // If server returned an error, show it directly
+                if (config.error) {
+                    showError(config.error);
+                    updateStatus('disconnected');
+                    return;
+                }
+                
+                // Set QT credentials from server config
+                qtCredentials = {
                     username: config.username,
                     password: config.password,
                     companyLocationId: config.companyLocationId,
                     userId: config.userId
                 };
                 
-                // Set session data from server config BEFORE authentication
-                sessionData = {
-                    companyLocationId: config.companyLocationId,
-                    userId: config.userId
-                };
                 
-                // Update poll interval if provided
-                if (config.pollInterval) {
-                    POLL_INTERVAL = config.pollInterval;
-                }
-                
-                console.log('Configuration loaded:', sessionData);
+                console.log('QT credentials loaded');
                 
             } catch (error) {
                 console.error('Failed to load config:', error);

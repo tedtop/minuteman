@@ -1,18 +1,10 @@
 {
   "name": "minuteman-dashboard",
   "version": "1.0.0",
+  "type": "commonjs",
   "description": "Minuteman Jet Center Line Dashboard",
-  "main": "proxy-server.js",
-  "scripts": {
-    "start": "node proxy-server.js",
-    "dev": "node proxy-server.js"
-  },
   "dependencies": {
-    "@supabase/supabase-js": "^2.55.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "node-fetch": "^2.6.7"
+    "@supabase/supabase-js": "^2.55.0"
   },
   "keywords": [
     "fuel",
@@ -21,5 +13,5 @@
     "monitoring"
   ],
   "author": "Ted Toporkov",
-  "license": "ISC"
+  "license": "MIT"
 }

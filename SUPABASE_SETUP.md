@@ -31,18 +31,18 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 
 ### 4. Tank Configuration
 
-Tank configuration is stored in `proxy-server.js` in the `tankConfig` object:
+Tank configuration is stored in `/api/fuel_farm/tanks.js` in the `tankConfig` object:
 
 - **T1-T6**: 12,000 gallon capacity at 86" max level (Avgas for T1, Jet A for T2-T6)
 - **T7**: 18,034 gallon capacity at 97" max level (Jet A)
 
-To modify tank configuration, edit the `tankConfig` object in `proxy-server.js`.
+To modify tank configuration, edit the `tankConfig` object in `/api/fuel_farm/tanks.js`.
 
 ## How It Works
 
 ### Database Connection
 
-- Server tests Supabase connection on startup
+- Serverless functions test Supabase connection on each request
 - Connection status is displayed in the frontend
 - If database is offline, readings cannot be saved but the app continues to work
 

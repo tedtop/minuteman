@@ -80,3 +80,6 @@ out/
 # Backup files
 *.bak
 *.backup
+
+# Vercel
+.vercel

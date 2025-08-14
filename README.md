@@ -1,15 +1,23 @@
-# Fuel Dispatch Monitor
+# Minuteman Fuel Dashboard
 
-A web application for monitoring fuel dispatch operations using the QT Technologies API.
+A serverless web application for monitoring fuel dispatch operations and managing fuel farm tank levels.
+
+## Features
+
+- **Fuel Dispatch Monitor**: Real-time QT Technologies dispatch data
+- **Fuel Farm Monitor**: Tank level tracking with Supabase persistence
+- **Client-Side Authentication**: Each browser handles its own QT session
+- **Serverless Architecture**: Runs on Vercel with auto-scaling
 
 ## Quick Start
 
 ### Prerequisites
-- Node.js (version 14 or higher)
-- npm (comes with Node.js)
+- Node.js (version 18 or higher)
+- Vercel CLI (`npm install -g vercel`)
 - QT Technologies account credentials
+- Supabase account (for fuel farm persistence)
 
-### Installation & Running
+### Local Development
 
 1. **Install dependencies:**
    ```bash
@@ -18,57 +26,56 @@ A web application for monitoring fuel dispatch operations using the QT Technolog
 
 2. **Configure environment variables:**
    ```bash
-   cp .env.example .env
-   # Edit .env with your QT Technologies credentials
+   cp .env.example .env.local
+   # Edit .env.local with your credentials
    ```
 
-3. **Start the proxy server:**
+3. **Start the development server:**
    ```bash
-   npm start
+   npm run dev
    ```
 
-4. **Open the application:**
-   - The server will start on http://localhost:3000
-   - Open http://localhost:3000/fuel_dispatch_app.html in your browser
-   - The application will automatically authenticate and load dispatch data
+4. **Open the applications:**
+   - Fuel Dispatch: http://localhost:3000/fuel_dispatch
+   - Fuel Farm: http://localhost:3000/fuel_farm
 
-## Why the Proxy Server?
+## Architecture
 
-The QT Technologies API doesn't allow direct browser requests due to CORS (Cross-Origin Resource Sharing) restrictions. The proxy server:
+Built on Vercel serverless functions with:
 
-- Runs locally on your machine
-- Handles authentication with QT Technologies
-- Forwards API requests and responses
-- Bypasses browser security restrictions
+- **API Functions**: `/api/` directory contains all serverless endpoints
+- **Static Files**: `/public/` directory for HTML interfaces  
+- **Client-Side Auth**: Browsers manage QT authentication cookies
+- **Database**: Supabase for fuel tank level persistence
 
-## Features
+## Applications
 
-- **Automatic Authentication**: Uses credentials from environment variables
-- **Real-time Data**: Polls for new dispatch data every 30 seconds
-- **Responsive Design**: Works on desktop and mobile devices
-- **Live Status**: Shows connection status and last update time
+### Fuel Dispatch Monitor
+- Real-time dispatch data from QT Technologies
+- Automatic authentication and session management
+- 30-second polling for live updates
+- Responsive design for desktop and mobile
 
-## Troubleshooting
+### Fuel Farm Monitor
+- Tank level tracking and updates
+- Persistent storage in Supabase
+- Real-time fuel capacity calculations
+- Tank configuration in application code
 
-### "Connection Error: Unable to connect to proxy server"
-- Make sure you ran `npm start` and the server is running
-- Check that the server is running on http://localhost:3000
-- Look for error messages in the terminal where you started the server
+## Deployment
 
-### "No dispatch data available"
-- Check the browser console (F12) for error messages
-- Verify the QT Technologies API is accessible
-- Check the terminal running the proxy server for API response logs
+### Automatic (Recommended)
+1. Connect GitHub repository to Vercel
+2. Set environment variables in Vercel dashboard
+3. Push to main branch for automatic deployment
 
-### Server won't start
-- Make sure Node.js is installed: `node --version`
-- Install dependencies: `npm install`
-- Check if port 3000 is already in use
+### Manual
+```bash
+vercel --prod
+```
 
-## Development
+## Documentation
 
-The application consists of:
-- `fuel_dispatch_app.html` - Main web application
-- `proxy-server.js` - Local proxy server to handle CORS
-- `package.json` - Node.js dependencies
-- `dispatches_with_change.json` - Sample API response structure
+- `README_DEVELOPMENT.md` - Detailed development setup
+- `SUPABASE_SETUP.md` - Database configuration guide
+- `CLAUDE.md` - Project context for AI assistance

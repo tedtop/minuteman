@@ -436,12 +436,12 @@
             }
 
             try {
-                const response = await fetch(`${API_BASE_URL}/tanks/${tankId}`, {
+                const response = await fetch(`${API_BASE_URL}/tanks`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ level: level })
+                    body: JSON.stringify({ tankId: tankId, level: level })
                 });
 
                 const data = await response.json();
@@ -485,20 +485,14 @@
             return date.toLocaleString();
         }
 
-        function updateStatus(status, dbConnected = false) {
+        function updateStatus(dbConnected) {
             const statusElement = document.getElementById('status');
-            if (status === 'connected') {
-                if (dbConnected) {
-                    statusElement.textContent = '🟢 Connected (Database: Active)';
-                    statusElement.style.background = '#d4edda';
-                    statusElement.style.color = '#155724';
-                } else {
-                    statusElement.textContent = '🟡 Connected (Database: Offline)';
-                    statusElement.style.background = '#fff3cd';
-                    statusElement.style.color = '#856404';
-                }
+            if (dbConnected) {
+                statusElement.textContent = '🟢 Connected';
+                statusElement.style.background = '#d4edda';
+                statusElement.style.color = '#155724';
             } else {
-                statusElement.textContent = '🔴 Disconnected';
+                statusElement.textContent = '🔴 Database Offline';
                 statusElement.style.background = '#f8d7da';
                 statusElement.style.color = '#721c24';
             }
