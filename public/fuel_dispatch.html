@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,8 +15,26 @@
             backdrop-filter: blur(10px);
             border-radius: 15px;
             padding: 25px;
-            margin-bottom: 20px;
+            margin: 20px 0;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .auth-loading {
+            display: inline-block;
+            color: #2c3e50;
+            font-weight: normal;
+        }
+
+        .auth-loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #2c3e50;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
         }
 
         .form-group {
@@ -48,6 +67,10 @@
             display: grid;
             gap: 15px;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+
+        .dispatch-grid:not(:empty) {
+            margin-bottom: 20px;
         }
 
         .dispatch-card {
@@ -159,18 +182,94 @@
             margin-top: 20px;
         }
 
+        /* Filter toggle styles */
+        .filter-controls {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 0px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        /* Toggle switch styles */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 34px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+
+        input:checked+.toggle-slider {
+            background-color: #667eea;
+        }
+
+        input:checked+.toggle-slider:before {
+            transform: translateX(26px);
+        }
+
+        .filter-label {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            cursor: pointer;
+            user-select: none;
+        }
+
         /* Mobile styles for dispatch-specific elements */
         @media (max-width: 768px) {
             .dispatch-grid {
                 grid-template-columns: 1fr;
             }
-            
+
             .flight-info {
                 grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            }
+
+            .filter-controls {
+                flex-direction: column;
+                gap: 10px;
+                padding: 15px;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -184,15 +283,23 @@
         <div class="auth-form" id="authForm" style="display: none;">
             <h3 style="margin-bottom: 20px; color: #2c3e50;">Authenticating to QT Technologies...</h3>
             <div style="text-align: center; padding: 20px;">
-                <div class="loading" style="display: inline-block;">Connecting</div>
+                <div class="auth-loading">Connecting...</div>
             </div>
         </div>
 
         <div id="errorMessage" class="error" style="display: none;"></div>
         <div id="loadingMessage" class="loading" style="display: none;">Loading dispatch data...</div>
-        
+
         <div id="dispatchContainer" class="dispatch-grid"></div>
-        
+
+        <div class="filter-controls">
+            <label class="filter-label" for="hideDepartedToggle">Hide departed flights</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="hideDepartedToggle" checked>
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+
         <div class="last-updated" id="lastUpdated"></div>
     </div>
 
@@ -200,8 +307,9 @@
         let isMonitoring = false;
         let monitoringInterval;
         let qtCookies = null;        // QT authentication cookies
-        let qtCredentials = null;    // QT username/password from config  
+        let qtCredentials = null;    // QT username/password from config
         let qtSessionData = null;    // QT company/user IDs for API calls
+        let currentDispatches = null; // Store current dispatch data for filtering
 
         // Configuration - dynamically determine the proxy URL
         const LOCAL_PROXY_URL = `${window.location.protocol}//${window.location.host}`;
@@ -213,7 +321,7 @@
         async function authenticate() {
             updateStatus('connecting');
             document.getElementById('authForm').style.display = 'block';
-            
+
             try {
                 // First, attempt to login via proxy server
                 const loginResponse = await fetch(`${LOCAL_PROXY_URL}${LOGIN_ENDPOINT}`, {
@@ -226,28 +334,28 @@
                         password: qtCredentials.password
                     })
                 });
-                
+
                 const loginData = await loginResponse.json();
-                
+
                 if (loginResponse.ok && loginData.success) {
                     qtCookies = loginData.qtCookies;
                     qtSessionData = {
                         companyLocationId: qtCredentials.companyLocationId,
                         userId: qtCredentials.userId
                     };
-                    
+
                     document.getElementById('authForm').style.display = 'none';
                     showSuccess('Authentication successful!');
-                    
+
                     // Load initial data
                     await fetchDispatchData();
-                    
+
                     // Start automatic refresh countdown
                     startRefreshCountdown();
                 } else {
                     throw new Error(loginData.message || `Login failed with status: ${loginResponse.status}`);
                 }
-                
+
             } catch (error) {
                 console.error('Authentication error:', error);
                 updateStatus('disconnected');
@@ -265,7 +373,7 @@
 
             try {
                 showLoading(true);
-                
+
                 // Make API call via proxy server
                 const response = await fetch(`${LOCAL_PROXY_URL}${DISPATCH_ENDPOINT}`, {
                     method: 'POST',
@@ -278,7 +386,7 @@
                         UserID: qtSessionData.userId
                     })
                 });
-                
+
                 if (!response.ok) {
                     if (response.status === 401) {
                         // QT session expired, try to re-authenticate
@@ -286,7 +394,7 @@
                         await authenticate();
                         return; // authenticate() will call fetchDispatchData() again
                     }
-                    
+
                     // Show complete server error for internal tool troubleshooting
                     const errorText = await response.text();
                     let serverError;
@@ -298,17 +406,18 @@
                     }
                     throw new Error(`Server Error ${response.status}: ${serverError}`);
                 }
-                
+
                 const data = await response.json();
 
                 if (data.Success) {
-                    displayDispatchData(data.Detail.Dispatches);
+                    currentDispatches = data.Detail.Dispatches;
+                    displayDispatchData(currentDispatches);
                     updateLastUpdated();
                 } else {
                     const errorMsg = data.ErrorMessage || 'Failed to fetch dispatch data';
                     showError(errorMsg);
                 }
-                
+
             } catch (error) {
                 console.error('Fetch error:', error);
                 if (error.message.includes('Failed to fetch')) {
@@ -335,7 +444,24 @@
                 return;
             }
 
-            dispatches.forEach(dispatch => {
+            // Filter departed flights if toggle is checked
+            const hideDeparted = document.getElementById('hideDepartedToggle').checked;
+            let filteredDispatches = dispatches;
+
+            if (hideDeparted) {
+                filteredDispatches = dispatches.filter(dispatch => dispatch.FlightStatus !== 'In Flight');
+            }
+
+            if (filteredDispatches.length === 0) {
+                if (hideDeparted && dispatches.length > 0) {
+                    container.innerHTML = '<div style="text-align: center; color: rgba(255,255,255,0.8); padding: 40px;">No upcoming flights (all flights have departed)</div>';
+                } else {
+                    container.innerHTML = '<div style="text-align: center; color: rgba(255,255,255,0.8); padding: 40px;">No dispatches available</div>';
+                }
+                return;
+            }
+
+            filteredDispatches.forEach(dispatch => {
                 const card = createDispatchCard(dispatch);
                 container.appendChild(card);
             });
@@ -345,7 +471,7 @@
         function createDispatchCard(dispatch) {
             const card = document.createElement('div');
             card.className = 'dispatch-card';
-            
+
             // Add priority class based on status
             if (dispatch.FlightStatus === 'In Flight') {
                 card.classList.add('priority');
@@ -354,13 +480,13 @@
             }
 
             const statusClass = dispatch.FlightStatus.toLowerCase().replace(' ', '-');
-            
+
             card.innerHTML = `
                 <div class="flight-header">
                     <div class="flight-number">${dispatch.FlightNumber} to ${dispatch.Destination}</div>
                     <div class="flight-status ${statusClass}">${dispatch.FlightStatus}</div>
                 </div>
-                
+
                 <div class="flight-info">
                     <div class="info-item">
                         <div class="info-label">Tail Number</div>
@@ -379,7 +505,7 @@
                         <div class="info-value">${formatDateTime(dispatch.DepartureDate)}</div>
                     </div>
                 </div>
-                
+
                 <div class="fuel-info">
                     <div class="fuel-quantity">
                         ${dispatch.QuantityInWeight} lbs (${dispatch.Quantity} gal)
@@ -394,7 +520,7 @@
         function formatDateTime(dateString) {
             if (!dateString) return 'N/A';
             const date = new Date(dateString);
-            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
 
         let refreshCountdown = 30;
@@ -403,8 +529,8 @@
         function updateStatus(status, message = null) {
             const statusElement = document.getElementById('status');
             statusElement.className = 'status ' + status;
-            
-            switch(status) {
+
+            switch (status) {
                 case 'connected':
                     statusElement.textContent = message || '🟢 Connected';
                     break;
@@ -420,11 +546,11 @@
         function startRefreshCountdown() {
             refreshCountdown = 30;
             if (countdownInterval) clearInterval(countdownInterval);
-            
+
             countdownInterval = setInterval(() => {
                 refreshCountdown--;
                 updateStatus('connected', `🟢 Next refresh in ${refreshCountdown}s`);
-                
+
                 if (refreshCountdown <= 0) {
                     refreshCountdown = 30;
                     fetchDispatchData();
@@ -458,7 +584,7 @@
         // Monitoring functions
         function startMonitoring() {
             if (isMonitoring) return;
-            
+
             if (!qtSessionData) {
                 showError('Please authenticate first');
                 return;
@@ -466,10 +592,10 @@
 
             isMonitoring = true;
             updateStatus('connected');
-            
+
             // Fetch data immediately
             fetchDispatchData();
-            
+
             // Set up polling interval
             monitoringInterval = setInterval(fetchDispatchData, POLL_INTERVAL);
         }
@@ -492,21 +618,21 @@
         }
 
         // Initialize
-        document.addEventListener('DOMContentLoaded', async function() {
+        document.addEventListener('DOMContentLoaded', async function () {
             updateStatus('connecting');
-            
+
             // Get configuration from server FIRST
             try {
                 const configResponse = await fetch(`${LOCAL_PROXY_URL}/api/config`);
                 const config = await configResponse.json();
-                
+
                 // If server returned an error, show it directly
                 if (config.error) {
                     showError(config.error);
                     updateStatus('disconnected');
                     return;
                 }
-                
+
                 // Set QT credentials from server config
                 qtCredentials = {
                     username: config.username,
@@ -514,20 +640,28 @@
                     companyLocationId: config.companyLocationId,
                     userId: config.userId
                 };
-                
-                
+
+
                 console.log('QT credentials loaded');
-                
+
             } catch (error) {
                 console.error('Failed to load config:', error);
                 showError('Failed to load configuration from server');
                 return;
             }
-            
+
             updateStatus('disconnected');
             // Now authenticate with proper session data
             authenticate();
+
+            // Add event listener for the filter toggle
+            document.getElementById('hideDepartedToggle').addEventListener('change', function () {
+                if (currentDispatches) {
+                    displayDispatchData(currentDispatches);
+                }
+            });
         });
     </script>
 </body>
+
 </html>
