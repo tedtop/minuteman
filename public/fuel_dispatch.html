@@ -807,31 +807,27 @@
                 }
             }
 
-            // Check for status changes
+            // Check for ChangeFlags increments (QT's official change tracking for all changes)
             for (const [key, newFlight] of newMap) {
                 const oldFlight = oldMap.get(key);
-                if (oldFlight && oldFlight.FlightStatus !== newFlight.FlightStatus) {
-                    changes.push({
-                        type: 'status_change',
-                        flight: newFlight,
-                        oldStatus: oldFlight.FlightStatus,
-                        newStatus: newFlight.FlightStatus,
-                        message: `${newFlight.FlightNumber}: Status changed from ${oldFlight.FlightStatus} to ${newFlight.FlightStatus}`
-                    });
-                }
-            }
-
-            // Check for fuel quantity changes (significant changes only)
-            for (const [key, newFlight] of newMap) {
-                const oldFlight = oldMap.get(key);
-                if (oldFlight && Math.abs(oldFlight.Quantity - newFlight.Quantity) > 10) {
-                    changes.push({
-                        type: 'fuel_change',
-                        flight: newFlight,
-                        oldQuantity: oldFlight.Quantity,
-                        newQuantity: newFlight.Quantity,
-                        message: `${newFlight.FlightNumber}: Fuel quantity updated to ${newFlight.Quantity} gal`
-                    });
+                if (oldFlight && newFlight.ChangeFlags !== undefined && oldFlight.ChangeFlags !== undefined) {
+                    if (newFlight.ChangeFlags > oldFlight.ChangeFlags) {
+                        // Create contextual message based on current dispatch data
+                        let message = `${newFlight.FlightNumber} to ${newFlight.Destination} (${newFlight.TailNumber}) - Dispatch updated`;
+                        
+                        // Add fuel info if present
+                        if (newFlight.QuantityInWeight && newFlight.QuantityInWeight > 0) {
+                            message = `${newFlight.FlightNumber} to ${newFlight.Destination} (${newFlight.TailNumber}) requested ${newFlight.QuantityInWeight} lbs of fuel`;
+                        }
+                        
+                        changes.push({
+                            type: 'dispatch_update',
+                            flight: newFlight,
+                            oldChangeFlags: oldFlight.ChangeFlags,
+                            newChangeFlags: newFlight.ChangeFlags,
+                            message: message
+                        });
+                    }
                 }
             }
 
@@ -845,17 +841,48 @@
             }
 
             try {
+                // Customize notification based on change type
+                let title, icon;
+                
+                switch (change.type) {
+                    case 'fuel_request':
+                        title = '⛽ New Fuel Request';
+                        icon = '⛽';
+                        break;
+                    case 'fuel_change':
+                        title = '⛽ Fuel Updated';
+                        icon = '⛽';
+                        break;
+                    case 'dispatch_update':
+                        title = '📋 Dispatch Updated';
+                        icon = '📋';
+                        break;
+                    case 'status_change':
+                        title = '✈️ Flight Status Changed';
+                        icon = '✈️';
+                        break;
+                    case 'new_flight':
+                        title = '🆕 New Flight Added';
+                        icon = '✈️';
+                        break;
+                    default:
+                        title = '✈️ Dispatch Update';
+                        icon = '✈️';
+                }
+
                 const payload = {
-                    title: '✈️ Dispatch Update',
+                    title: title,
                     body: change.message,
-                    icon: 'data:image/svg+xml,%3csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3e%3ccircle cx="50" cy="50" r="45" fill="%23667eea"/%3e%3ctext x="50" y="60" text-anchor="middle" font-size="40" fill="white"%3e✈️%3c/text%3e%3c/svg%3e',
-                    badge: 'data:image/svg+xml,%3csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3e%3ccircle cx="50" cy="50" r="45" fill="%23667eea"/%3e%3ctext x="50" y="60" text-anchor="middle" font-size="40" fill="white"%3e✈️%3c/text%3e%3c/svg%3e',
-                    tag: `dispatch-${change.flight.FlightNumber}`,
+                    icon: icon,
+                    tag: `dispatch-${change.flight.FlightNumber}-${change.type}`,
+                    requireInteraction: change.type === 'fuel_request', // Fuel requests are important
                     data: {
                         type: change.type,
                         flightNumber: change.flight.FlightNumber,
                         tailNumber: change.flight.TailNumber,
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date().toISOString(),
+                        changeFlags: change.newChangeFlags || null,
+                        fuelWeight: change.newWeight || null
                     },
                     actions: [
                         {

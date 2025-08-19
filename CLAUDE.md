@@ -60,3 +60,20 @@ This is a single-page HTML application called "Fuel Dispatch Monitor" that provi
 - `fetchDispatchData()`: Retrieves dispatch information
 - `displayDispatchData()`: Renders dispatch cards
 - `startMonitoring()`/`stopMonitoring()`: Controls automatic data refresh
+
+## Push Notifications
+The app includes PWA push notification functionality that automatically sends notifications when dispatch changes occur. Uses Vercel Fluid Compute for persistent subscription storage across serverless function invocations.
+
+### Current Implementation
+- **Primary Detection**: Uses QT's `ChangeFlags` field increments to detect all dispatch changes
+- **Notification Types**: Fuel requests, dispatch updates, new flights
+- **Delivery**: Real-time push notifications via web-push with VAPID authentication
+
+### Future Enhancements (TODO)
+- **Granular Change Detection**: Implement specific detection for different change types:
+  - Status changes (In Flight → Completed, etc.)
+  - Gate changes
+  - Time changes (departure/arrival updates)  
+  - Aircraft type changes
+- **Enhanced Notification Categories**: Create specific notification types for each change category
+- **Change History**: Track and display what specifically changed in each dispatch update

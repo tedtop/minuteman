@@ -53,16 +53,18 @@ module.exports = async function handler(req, res) {
 
         try {
             // Create notification payload based on latest dispatch or fallback
+            // Add timestamp to tag to ensure unique notifications each time
+            const timestamp = Date.now();
             let title, body, tag;
 
             if (latestDispatch) {
                 title = `⛽ Fuel Request - ${latestDispatch.FlightNumber}`;
                 body = `${latestDispatch.FlightNumber} to ${latestDispatch.Destination} (${latestDispatch.TailNumber}) requested ${latestDispatch.QuantityInWeight} lbs of fuel`;
-                tag = `fuel-request-${latestDispatch.FlightNumber}`;
+                tag = `fuel-request-${latestDispatch.FlightNumber}-${timestamp}`;
             } else {
                 title = '✈️ Test Notification';
                 body = 'No upcoming dispatches available at this time';
-                tag = 'test-notification';
+                tag = `test-notification-${timestamp}`;
             }
 
             const payload = JSON.stringify({
