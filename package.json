@@ -4,7 +4,8 @@
   "type": "commonjs",
   "description": "Minuteman Jet Center Line Dashboard",
   "dependencies": {
-    "@supabase/supabase-js": "^2.55.0"
+    "@supabase/supabase-js": "^2.55.0",
+    "web-push": "^3.6.7"
   },
   "keywords": [
     "fuel",

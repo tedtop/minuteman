@@ -19,7 +19,8 @@ module.exports = async function handler(req, res) {
             username: process.env.QT_USERNAME,
             password: process.env.QT_PASSWORD,
             companyLocationId: process.env.QT_COMPANY_LOCATION_ID,
-            userId: process.env.QT_USER_ID
+            userId: process.env.QT_USER_ID,
+            vapidPublicKey: process.env.VAPID_PUBLIC_KEY
         };
 
         // Validate required config
