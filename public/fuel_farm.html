@@ -327,8 +327,8 @@
                                max="${tank.maxLevel}"
                                step="0.1"
                                onkeypress="handleEnterKey(event, '${tankId}')"
-                               onfocus="this.placeholder=''"
-                               onblur="this.placeholder='Level (inches)'">
+                               onfocus="this.placeholder=''; pauseCountdownUpdates()"
+                               onblur="this.placeholder='Level (inches)'; resumeCountdownUpdates()">
                         <button class="update-btn" onclick="updateTankLevel('${tankId}')">
                             Update
                         </button>
@@ -375,8 +375,8 @@
 
                 if (data.success) {
                     input.value = '';
-                    // Reload data to reflect changes
-                    await loadTankData();
+                    // Update the display immediately without full reload
+                    updateTankDisplay(tankId, level);
                 } else {
                     console.error(`Tank update failed for ${tankId}:`, data.error || 'Unknown error');
                 }
@@ -436,10 +436,34 @@
             updateRefreshCounter();
         }
 
+        let userInteracting = false;
+
         function updateRefreshCounter() {
+            // Don't update DOM while user is interacting with inputs
+            if (userInteracting) return;
+            
             const statusElement = document.getElementById('status');
             statusElement.textContent = `🟢 Next refresh in ${refreshCountdown}s`;
             statusElement.className = 'status connected';
+        }
+
+        function pauseCountdownUpdates() {
+            userInteracting = true;
+        }
+
+        function resumeCountdownUpdates() {
+            userInteracting = false;
+            // Immediately update to show current countdown
+            updateRefreshCounter();
+        }
+
+        function updateSingleTank(tankId, tankData) {
+            // Find and update just this tank's display
+            const existingCard = document.querySelector(`[data-tank-id="${tankId}"]`);
+            if (existingCard) {
+                const newCard = createTankCard(tankId, tankData);
+                existingCard.parentNode.replaceChild(newCard, existingCard);
+            }
         }
 
         function handleEnterKey(event, tankId) {
