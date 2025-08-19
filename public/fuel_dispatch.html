@@ -581,12 +581,28 @@
             switch (status) {
                 case 'connected':
                     statusElement.textContent = message || '🟢 Connected';
+                    // Make countdown clickable for refresh
+                    if (message && message.includes('Next refresh in')) {
+                        statusElement.style.cursor = 'pointer';
+                        statusElement.title = 'Click to refresh now';
+                        statusElement.onclick = handleRefreshClick;
+                    } else {
+                        statusElement.style.cursor = 'default';
+                        statusElement.title = '';
+                        statusElement.onclick = null;
+                    }
                     break;
                 case 'connecting':
                     statusElement.textContent = message || '🟡 Connecting...';
+                    statusElement.style.cursor = 'default';
+                    statusElement.title = '';
+                    statusElement.onclick = null;
                     break;
                 case 'disconnected':
                     statusElement.textContent = message || '🔴 Disconnected';
+                    statusElement.style.cursor = 'default';
+                    statusElement.title = '';
+                    statusElement.onclick = null;
                     break;
             }
         }
@@ -604,6 +620,24 @@
                     fetchDispatchData();
                 }
             }, 1000);
+        }
+
+        function handleRefreshClick() {
+            // Reset countdown and fetch data immediately
+            refreshCountdown = 30;
+            if (countdownInterval) clearInterval(countdownInterval);
+            
+            // Show refreshing status briefly
+            updateStatus('connecting', '🟡 Refreshing...');
+            
+            // Fetch new data
+            fetchDispatchData().then(() => {
+                // Restart countdown after successful fetch
+                startRefreshCountdown();
+            }).catch(() => {
+                // Restart countdown even if fetch fails
+                startRefreshCountdown();
+            });
         }
 
         function showError(message) {
