@@ -81,5 +81,8 @@ out/
 *.bak
 *.backup
 
+# Claude
+.claude
+
 # Vercel
 .vercel

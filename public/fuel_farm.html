@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fuel Farm Monitor</title>
     <link rel="stylesheet" href="common.css">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Fuel Farm">
     <style>
         /* Tank-specific styles */
 
@@ -36,6 +41,34 @@
             transform: translateY(-5px);
             box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
         }
+
+        /* Special styling for T7 - outside containment area */
+        .tank-card.t7 {
+            background: rgba(255, 248, 220, 0.98);
+            border: 2px solid #ffc107;
+            box-shadow: 0 8px 32px rgba(255, 193, 7, 0.2);
+        }
+
+        .tank-card.t7:hover {
+            box-shadow: 0 12px 40px rgba(255, 193, 7, 0.3);
+        }
+
+        /* Divider before T7 to show separation */
+        .containment-divider {
+            display: flex;
+            align-items: center;
+            margin: 0 10px;
+            flex-shrink: 0;
+        }
+
+        .containment-divider::before {
+            content: '';
+            height: 200px;
+            width: 3px;
+            background: linear-gradient(180deg, transparent 0%, #ffc107 20%, #ffc107 80%, transparent 100%);
+            border-radius: 2px;
+        }
+
 
         .tank-header {
             margin-bottom: 20px;
@@ -235,7 +268,7 @@
     <div class="container">
         <div class="header">
             <h1>⛽ Fuel Farm Levels</h1>
-            <div class="status connected" id="status">🟢 Next refresh in 30s</div>
+            <div class="status connecting" id="status">🟡 Loading...</div>
             <div class="nav-buttons">
                 <a href="/fuel_dispatch">✈️ Fuel Dispatch</a>
             </div>
@@ -252,18 +285,26 @@
         let refreshCountdown = 30;
         let countdownInterval;
 
+        let refreshInterval;
+
         // Load tank data on page load
         document.addEventListener('DOMContentLoaded', function () {
+            // Set initial loading status
+            updateStatus('loading');
+            
+            // Load initial data
             loadTankData();
-            startRefreshCounter();
-            // Refresh data every 30 seconds
-            setInterval(() => {
+            
+            // Start refresh cycle - will be managed based on connection status
+            refreshInterval = setInterval(() => {
                 loadTankData();
-                resetRefreshCounter();
             }, 30000);
         });
 
         async function loadTankData() {
+            // Show loading status while fetching data
+            updateStatus('loading');
+            
             try {
                 const response = await fetch(`${API_BASE_URL}/tanks`);
                 const data = await response.json();
@@ -271,13 +312,39 @@
                 if (data.success) {
                     tanks = data.tanks;
                     renderTanks();
-                    updateStatus(data.dbConnected);
+                    // Only show refresh counter if database is connected and working
+                    if (data.dbConnected) {
+                        startRefreshCounter();
+                    } else {
+                        // Stop any existing refresh counter and show offline status
+                        if (countdownInterval) {
+                            clearInterval(countdownInterval);
+                        }
+                        // Stop the background refresh interval when database is offline
+                        if (refreshInterval) {
+                            clearInterval(refreshInterval);
+                            refreshInterval = null;
+                        }
+                        updateStatus('disconnected');
+                    }
                 } else {
                     showError('Failed to load tank data');
+                    // Stop the background refresh interval on failure
+                    if (refreshInterval) {
+                        clearInterval(refreshInterval);
+                        refreshInterval = null;
+                    }
+                    updateStatus('disconnected');
                 }
             } catch (error) {
                 console.error('Error loading tank data:', error);
                 showError('Connection error: ' + error.message);
+                // Stop the background refresh interval on connection error
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+                updateStatus('disconnected');
             }
         }
 
@@ -285,7 +352,22 @@
             const container = document.getElementById('tanksContainer');
             container.innerHTML = '';
 
-            Object.entries(tanks).forEach(([tankId, tank]) => {
+            // Sort tanks to ensure T1-T6 come first, then T7
+            const sortedTanks = Object.entries(tanks).sort(([a], [b]) => {
+                // Extract tank numbers for proper sorting
+                const aNum = parseInt(a.replace('T', ''));
+                const bNum = parseInt(b.replace('T', ''));
+                return aNum - bNum;
+            });
+
+            sortedTanks.forEach(([tankId, tank], index) => {
+                // Add divider before T7 to show it's outside containment area
+                if (tankId === 'T7') {
+                    const divider = document.createElement('div');
+                    divider.className = 'containment-divider';
+                    container.appendChild(divider);
+                }
+
                 const tankCard = createTankCard(tankId, tank);
                 container.appendChild(tankCard);
             });
@@ -294,6 +376,11 @@
         function createTankCard(tankId, tank) {
             const card = document.createElement('div');
             card.className = 'tank-card';
+            
+            // Add special styling for T7 (outside containment area)
+            if (tankId === 'T7') {
+                card.className += ' t7';
+            }
 
             const percentage = Math.round((tank.level / tank.maxLevel) * 100);
             const levelHeight = (tank.level / tank.maxLevel) * 100;
@@ -319,13 +406,12 @@
 
                 <div class="update-section">
                     <div class="input-group">
-                        <input type="number"
+                        <input type="text"
+                               inputmode="decimal"
                                class="level-input"
                                id="input-${tankId}"
                                placeholder="Level (inches)"
-                               min="0"
-                               max="${tank.maxLevel}"
-                               step="0.1"
+                               oninput="validateTankInput(this)"
                                onkeypress="handleEnterKey(event, '${tankId}')"
                                onfocus="this.placeholder=''; pauseCountdownUpdates()"
                                onblur="this.placeholder='Level (inches)'; resumeCountdownUpdates()">
@@ -352,16 +438,63 @@
             return markers;
         }
 
+        function validateTankInput(input) {
+            // Allow only numbers, decimal point, apostrophe ('), and double quote (")
+            const allowedPattern = /^[0-9.'"\s]*$/;
+            
+            if (!allowedPattern.test(input.value)) {
+                // Remove invalid characters
+                input.value = input.value.replace(/[^0-9.'"\s]/g, '');
+            }
+        }
+
+        function parseFootInchToInches(input) {
+            // Handle foot-inch notation like "5'7" or "5'7""
+            const footInchMatch = input.match(/^(\d+(?:\.\d+)?)'(\d+(?:\.\d+)?)"?$/);
+            if (footInchMatch) {
+                const feet = parseFloat(footInchMatch[1]);
+                const inches = parseFloat(footInchMatch[2]);
+                return (feet * 12) + inches;
+            }
+            
+            // Handle just feet like "5'" 
+            const feetOnlyMatch = input.match(/^(\d+(?:\.\d+)?)'$/);
+            if (feetOnlyMatch) {
+                const feet = parseFloat(feetOnlyMatch[1]);
+                return feet * 12;
+            }
+            
+            // Handle regular number input
+            const number = parseFloat(input);
+            if (!isNaN(number)) {
+                return number;
+            }
+            
+            return NaN;
+        }
+
         async function updateTankLevel(tankId) {
             const input = document.getElementById(`input-${tankId}`);
-            const level = parseFloat(input.value);
+            const level = parseFootInchToInches(input.value.trim());
+            const tank = tanks[tankId];
 
-            // Basic validation  
-            if (isNaN(level) || level < 0) {
-                console.warn(`Invalid level for ${tankId}: ${input.value}`);
+            // Convert to inches first, then validate
+            if (isNaN(level)) {
+                showError(`Invalid input for ${tankId}: ${input.value}`);
                 return;
             }
 
+            // Check tank limits
+            if (level < tank.minLevel || level > tank.maxLevel) {
+                showError(`${tankId} must be between ${tank.minLevel}" and ${tank.maxLevel}"`);
+                return;
+            }
+
+            // Update the display immediately for better UX (works even offline)
+            updateTankDisplay(tankId, level);
+            input.value = '';
+
+            // Try to save to database (may fail in offline mode)
             try {
                 const response = await fetch(`${API_BASE_URL}/tanks`, {
                     method: 'POST',
@@ -373,15 +506,11 @@
 
                 const data = await response.json();
 
-                if (data.success) {
-                    input.value = '';
-                    // Update the display immediately without full reload
-                    updateTankDisplay(tankId, level);
-                } else {
-                    console.error(`Tank update failed for ${tankId}:`, data.error || 'Unknown error');
+                if (!data.success) {
+                    showError(`Failed to save ${tankId} to database: ${data.error || 'Unknown error'}`);
                 }
             } catch (error) {
-                console.error(`Connection error updating tank ${tankId}:`, error.message);
+                showError(`Database offline - ${tankId} update not saved to database`);
             }
         }
 
@@ -402,18 +531,47 @@
             return date.toLocaleString();
         }
 
-        function updateStatus(dbConnected) {
+        function updateStatus(status) {
             const statusElement = document.getElementById('status');
-            if (!dbConnected) {
-                statusElement.textContent = '🔴 Database Offline';
-                statusElement.className = 'status disconnected';
-                // Stop the countdown when database is offline
-                if (countdownInterval) {
-                    clearInterval(countdownInterval);
-                }
-            } else {
-                // Database is connected, let the countdown continue
-                statusElement.className = 'status connected';
+            
+            switch (status) {
+                case 'loading':
+                    statusElement.textContent = '🟡 Loading...';
+                    statusElement.className = 'status connecting';
+                    statusElement.style.cursor = 'default';
+                    statusElement.title = '';
+                    statusElement.onclick = null;
+                    // Stop countdown while loading
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                    }
+                    break;
+                case 'disconnected':
+                    statusElement.textContent = '🔴 Database Offline';
+                    statusElement.className = 'status disconnected';
+                    statusElement.style.cursor = 'pointer';
+                    statusElement.title = 'Click to retry connection';
+                    statusElement.onclick = handleRefreshClick;
+                    // Stop the countdown when database is offline
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                    }
+                    break;
+                case 'connected':
+                    // Database is connected, let the countdown continue
+                    statusElement.className = 'status connected';
+                    statusElement.style.cursor = 'default';
+                    statusElement.title = '';
+                    statusElement.onclick = null;
+                    break;
+                default:
+                    // Handle legacy boolean parameter for backward compatibility
+                    if (status === false) {
+                        updateStatus('disconnected');
+                    } else if (status === true) {
+                        updateStatus('connected');
+                    }
+                    break;
             }
         }
 
@@ -442,9 +600,29 @@
             // Don't update DOM while user is interacting with inputs
             if (userInteracting) return;
             
+            // Only show refresh counter if we have an active countdown interval
+            if (!countdownInterval) return;
+            
             const statusElement = document.getElementById('status');
             statusElement.textContent = `🟢 Next refresh in ${refreshCountdown}s`;
             statusElement.className = 'status connected';
+            statusElement.style.cursor = 'pointer';
+            statusElement.title = 'Click to refresh now';
+            statusElement.onclick = handleRefreshClick;
+        }
+
+        function handleRefreshClick() {
+            // Reset countdown and fetch data immediately
+            refreshCountdown = 30;
+            if (countdownInterval) clearInterval(countdownInterval);
+            
+            // Show refreshing status briefly
+            updateStatus('loading');
+            
+            // Fetch new data
+            loadTankData().then(() => {
+                // Data loading handles status updates and refresh counter restart
+            });
         }
 
         function pauseCountdownUpdates() {
@@ -455,6 +633,30 @@
             userInteracting = false;
             // Immediately update to show current countdown
             updateRefreshCounter();
+        }
+
+        function updateTankDisplay(tankId, newLevel) {
+            // Update the stored tank data immediately
+            if (tanks[tankId]) {
+                tanks[tankId].level = newLevel;
+                tanks[tankId].lastUpdated = new Date().toISOString();
+                
+                // Re-render just this tank
+                const container = document.getElementById('tanksContainer');
+                const tankCards = container.children;
+                
+                // Find the tank card by iterating through children
+                for (let i = 0; i < tankCards.length; i++) {
+                    const card = tankCards[i];
+                    // Check if this card contains the tank we're looking for
+                    const tankNameElement = card.querySelector('.tank-name');
+                    if (tankNameElement && tankNameElement.textContent === tankId) {
+                        const newCard = createTankCard(tankId, tanks[tankId]);
+                        container.replaceChild(newCard, card);
+                        break;
+                    }
+                }
+            }
         }
 
         function updateSingleTank(tankId, tankData) {

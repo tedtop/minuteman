@@ -3,13 +3,34 @@ const { createClient } = require('@supabase/supabase-js');
 
 // Tank configuration (stored in code for easy modification)
 const tankConfig = {
-    T1: { maxLevel: 86, fuelType: 'Avgas', capacity: 12000, name: 'Tank 1' },
-    T2: { maxLevel: 86, fuelType: 'Jet A', capacity: 12000, name: 'Tank 2' },
-    T3: { maxLevel: 86, fuelType: 'Jet A', capacity: 12000, name: 'Tank 3' },
-    T4: { maxLevel: 86, fuelType: 'Jet A', capacity: 12000, name: 'Tank 4' },
-    T5: { maxLevel: 86, fuelType: 'Jet A', capacity: 12000, name: 'Tank 5' },
-    T6: { maxLevel: 86, fuelType: 'Jet A', capacity: 12000, name: 'Tank 6' },
-    T7: { maxLevel: 97, fuelType: 'Jet A', capacity: 18034, name: 'Tank 7' }
+    T1: { 
+        minLevel: 1, maxLevel: 96, usableMin: 16, usableMax: 86,
+        fuelType: 'Avgas', capacity: 12000, name: 'Tank 1' 
+    },
+    T2: { 
+        minLevel: 1, maxLevel: 96, usableMin: 16, usableMax: 86,
+        fuelType: 'Jet A', capacity: 12000, name: 'Tank 2' 
+    },
+    T3: { 
+        minLevel: 1, maxLevel: 96, usableMin: 16, usableMax: 86,
+        fuelType: 'Jet A', capacity: 12000, name: 'Tank 3' 
+    },
+    T4: { 
+        minLevel: 1, maxLevel: 96, usableMin: 16, usableMax: 86,
+        fuelType: 'Jet A', capacity: 12000, name: 'Tank 4' 
+    },
+    T5: { 
+        minLevel: 1, maxLevel: 96, usableMin: 16, usableMax: 86,
+        fuelType: 'Jet A', capacity: 12000, name: 'Tank 5' 
+    },
+    T6: { 
+        minLevel: 1, maxLevel: 96, usableMin: 16, usableMax: 86,
+        fuelType: 'Jet A', capacity: 12000, name: 'Tank 6' 
+    },
+    T7: { 
+        minLevel: 1, maxLevel: 114, usableMin: 14, usableMax: 93,
+        fuelType: 'Jet A', capacity: 18034, name: 'Tank 7' 
+    }
 };
 
 // Initialize Supabase client
@@ -23,13 +44,13 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
 
 async function testConnection() {
     if (!supabase) return false;
-    
+
     try {
         const { data, error } = await supabase
             .from('tank_level_readings')
             .select('id')
             .limit(1);
-        
+
         return !error;
     } catch (error) {
         console.error('Database connection test failed:', error);
@@ -39,7 +60,7 @@ async function testConnection() {
 
 async function getLatestReadings() {
     if (!supabase) throw new Error('Database not configured');
-    
+
     const { data, error } = await supabase
         .rpc('get_latest_tank_readings');
 
@@ -49,7 +70,7 @@ async function getLatestReadings() {
 
 async function recordTankLevel(tankId, level) {
     if (!supabase) throw new Error('Database not configured');
-    
+
     const { data, error } = await supabase
         .from('tank_level_readings')
         .insert({
@@ -80,12 +101,15 @@ module.exports = async function handler(req, res) {
         if (req.method === 'GET') {
             // Get all tank levels
             let tanks = {};
-            
+
             // Create tank objects from config
             for (const [tankId, config] of Object.entries(tankConfig)) {
                 tanks[tankId] = {
                     level: 0, // default when no readings
+                    minLevel: config.minLevel,
                     maxLevel: config.maxLevel,
+                    usableMin: config.usableMin,
+                    usableMax: config.usableMax,
                     fuelType: config.fuelType,
                     capacity: config.capacity,
                     name: config.name,
@@ -97,7 +121,7 @@ module.exports = async function handler(req, res) {
                 try {
                     // Get latest readings from database
                     const latestReadings = await getLatestReadings();
-                    
+
                     // Merge readings with config
                     latestReadings.forEach(reading => {
                         if (tanks[reading.tank_id]) {
@@ -130,10 +154,10 @@ module.exports = async function handler(req, res) {
             const tank = tankConfig[tankId];
 
             // Validate level
-            if (typeof level !== 'number' || level < 0 || level > tank.maxLevel) {
+            if (typeof level !== 'number' || level < tank.minLevel || level > tank.maxLevel) {
                 return res.status(400).json({
                     success: false,
-                    error: `Level must be between 0 and ${tank.maxLevel} inches`
+                    error: `Level must be between ${tank.minLevel} and ${tank.maxLevel} inches`
                 });
             }
 
@@ -141,7 +165,7 @@ module.exports = async function handler(req, res) {
             if (!dbConnected) {
                 return res.status(503).json({
                     success: false,
-                    error: 'Database not available. Cannot persist reading.'
+                    error: 'Database not available.'
                 });
             }
 

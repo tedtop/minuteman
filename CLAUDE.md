@@ -77,3 +77,17 @@ The app includes PWA push notification functionality that automatically sends no
   - Aircraft type changes
 - **Enhanced Notification Categories**: Create specific notification types for each change category
 - **Change History**: Track and display what specifically changed in each dispatch update
+
+## Fuel Farm Enhancements (TODO)
+- **Enhanced Tank Level Visual Indicators**: Make tank level displays prettier with color-coded zones:
+  - Red zones for unusable fuel areas (below usable minimum)
+  - Yellow zones for caution/overflow situations (above usable maximum)
+  - Green zones for normal operating ranges (usable fuel levels)
+- **Fuel Quantity in Gallons**: Add display of actual fuel quantity in gallons using conversion tables
+  - Parse conversion chart images from repository
+  - Implement inches-to-gallons lookup for each tank
+  - Display both inches and gallons on tank cards
+- **Mobile-Friendly Level Input**: Consider implementing a scrolling level selector for mobile devices
+  - Current numeric keyboard works but could be enhanced with a dial/slider interface
+  - Would provide better mobile UX for selecting tank levels
+  - Could include preset common values or increment/decrement buttons
