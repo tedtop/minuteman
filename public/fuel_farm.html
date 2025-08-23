@@ -21,8 +21,13 @@
             max-width: 100%;
             margin: 0 auto;
             overflow-x: auto;
-            padding: 10px;
-            justify-content: center;
+            overflow-y: hidden;
+            padding: 10px 20px;
+            justify-content: flex-start;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            /* Ensure tanks can be scrolled to on mobile */
+            box-sizing: border-box;
         }
 
         .tank-card {
@@ -239,13 +244,19 @@
         @media (max-width: 768px) {
             .tanks-container {
                 gap: 15px;
-                padding: 5px;
+                padding: 10px 15px;
+                /* Ensure proper scrolling on mobile */
+                justify-content: flex-start;
+                overflow-x: auto;
+                scroll-snap-type: x proximity;
             }
 
             .tank-card {
                 flex: 0 0 140px;
                 min-width: 140px;
                 padding: 15px;
+                /* Add scroll snap for better mobile experience */
+                scroll-snap-align: start;
             }
 
             .tank-visual {
@@ -259,6 +270,15 @@
 
             .current-level {
                 font-size: 24px;
+            }
+            
+            /* Make sure first and last tanks are fully accessible */
+            .tank-card:first-child {
+                margin-left: 0;
+            }
+            
+            .tank-card:last-child {
+                margin-right: 15px;
             }
         }
     </style>
