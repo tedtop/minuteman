@@ -322,14 +322,22 @@
         document.addEventListener('DOMContentLoaded', function () {
             // Set initial loading status
             updateStatus('loading');
-            
+
             // Load initial data
             loadTankData();
-            
+
             // Start refresh cycle - will be managed based on connection status
             refreshInterval = setInterval(() => {
                 loadTankData();
             }, 30000);
+
+            // Refresh immediately when the app/tab regains focus
+            document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState === 'visible') {
+                    if (countdownInterval) clearInterval(countdownInterval);
+                    loadTankData();
+                }
+            });
         });
 
         function isUserEnteringData() {

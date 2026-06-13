@@ -586,14 +586,14 @@
             }, 1000);
         }
 
-        function handleRefreshClick() {
+        function refreshNow() {
             // Reset countdown and fetch data immediately
             refreshCountdown = 30;
             if (countdownInterval) clearInterval(countdownInterval);
-            
+
             // Show refreshing status briefly
             updateStatus('connecting', '🟡 Refreshing...');
-            
+
             // Fetch new data
             fetchDispatchData().then(() => {
                 // Restart countdown after successful fetch
@@ -602,6 +602,10 @@
                 // Restart countdown even if fetch fails
                 startRefreshCountdown();
             });
+        }
+
+        function handleRefreshClick() {
+            refreshNow();
         }
 
         function showError(message) {
@@ -1001,12 +1005,19 @@
                 try {
                     await navigator.serviceWorker.register('/sw.js');
                     console.log('Service worker registered');
-                    
+
                     // Push notifications will be initialized when user clicks test button (Safari requirement)
                 } catch (error) {
                     console.error('Service worker registration failed:', error);
                 }
             }
+
+            // Refresh immediately when the app/tab regains focus
+            document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState === 'visible' && qtSessionData) {
+                    refreshNow();
+                }
+            });
         });
     </script>
 </body>
