@@ -117,6 +117,16 @@
             color: #2c3e50;
         }
 
+        .fr24-link {
+            color: inherit;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .fr24-link:hover {
+            text-decoration: underline;
+        }
+
         .fuel-info {
             background: rgba(39, 174, 96, 0.1);
             padding: 15px;
@@ -323,7 +333,6 @@
         </div>
 
         <div id="errorMessage" class="error" style="display: none;"></div>
-        <div id="loadingMessage" class="loading" style="display: none;">Loading dispatch data...</div>
 
         <div id="dispatchContainer" class="dispatch-grid"></div>
 
@@ -385,8 +394,6 @@
             }
 
             try {
-                showLoading(true);
-
                 // Make API call via proxy server
                 const response = await fetch(`${LOCAL_PROXY_URL}${DISPATCH_ENDPOINT}`, {
                     method: 'POST',
@@ -446,8 +453,6 @@
                 } else {
                     showError('Error fetching dispatch data: ' + error.message);
                 }
-            } finally {
-                showLoading(false);
             }
         }
 
@@ -498,16 +503,22 @@
 
             const statusClass = dispatch.FlightStatus.toLowerCase().replace(' ', '-');
 
+            const fr24Url = dispatch.TailNumber
+                ? `https://www.flightradar24.com/data/aircraft/${dispatch.TailNumber.toLowerCase()}`
+                : null;
+            const flightTitle = `${dispatch.FlightNumber} to ${dispatch.Destination}`;
+            const tailNumberDisplay = dispatch.TailNumber || '';
+
             card.innerHTML = `
                 <div class="flight-header">
-                    <div class="flight-number">${dispatch.FlightNumber} to ${dispatch.Destination}</div>
+                    <div class="flight-number">${fr24Url ? `<a class="fr24-link" href="${fr24Url}" target="_blank" rel="noopener noreferrer">${flightTitle}</a>` : flightTitle}</div>
                     <div class="flight-status ${statusClass}">${dispatch.FlightStatus}</div>
                 </div>
 
                 <div class="flight-info">
                     <div class="info-item">
                         <div class="info-label">Tail Number</div>
-                        <div class="info-value">${dispatch.TailNumber}</div>
+                        <div class="info-value">${fr24Url ? `<a class="fr24-link" href="${fr24Url}" target="_blank" rel="noopener noreferrer">${tailNumberDisplay}</a>` : tailNumberDisplay}</div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Airline</div>
@@ -625,10 +636,6 @@
         function showSuccess(message) {
             // You can implement a success message display here
             console.log('Success:', message);
-        }
-
-        function showLoading(show) {
-            document.getElementById('loadingMessage').style.display = show ? 'block' : 'none';
         }
 
         function updateLastUpdated() {
