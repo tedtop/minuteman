@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fuel Farm Monitor</title>
     <link rel="stylesheet" href="common.css">
+    <script src="gallons-tables.js"></script>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#667eea">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -182,6 +183,12 @@
         }
 
         .level-percentage {
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        .level-gallons {
             font-size: 14px;
             color: #6c757d;
             margin-bottom: 15px;
@@ -449,6 +456,7 @@
                 <div class="level-info">
                     <div class="current-level">${tank.level}"</div>
                     <div class="level-percentage">${percentage}% (${tank.usableMax}" usable)</div>
+                    <div class="level-gallons">${Math.round(inchesToGallons(tankId, tank.level)).toLocaleString()} gal</div>
                 </div>
 
                 <div class="update-section">
