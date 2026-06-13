@@ -1,3 +1,10 @@
+// Unused - kept for reference only.
+//
+// This was the original QT portal username/password login flow, used to
+// obtain session cookies before making dispatch requests. We later found
+// that GetDispatchDetail works fine with just QT_COMPANY_LOCATION_ID and
+// QT_USER_ID, with no session cookies required, so this endpoint is no
+// longer called. Left here in case that ever changes.
 module.exports = async function handler(req, res) {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');

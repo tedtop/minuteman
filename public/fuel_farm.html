@@ -870,14 +870,6 @@
                     statusElement.title = '';
                     statusElement.onclick = null;
                     break;
-                default:
-                    // Handle legacy boolean parameter for backward compatibility
-                    if (status === false) {
-                        updateStatus('disconnected');
-                    } else if (status === true) {
-                        updateStatus('connected');
-                    }
-                    break;
             }
         }
 
