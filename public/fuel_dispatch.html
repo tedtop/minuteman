@@ -7,6 +7,8 @@
     <title>Fuel Dispatch Monitor</title>
     <link rel="stylesheet" href="common.css">
     <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <meta name="theme-color" content="#667eea">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -147,6 +149,39 @@
             color: rgba(255, 255, 255, 0.8);
             font-size: 14px;
             margin-top: 20px;
+        }
+
+        /* Fuel density box */
+        .density-box {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 25px;
+            flex-wrap: wrap;
+        }
+
+        .density-item {
+            text-align: center;
+        }
+
+        .density-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .density-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #2c3e50;
         }
 
         /* Filter toggle styles */
@@ -296,8 +331,123 @@
             margin-bottom: 0;
         }
 
+        .help-panel a {
+            white-space: nowrap;
+        }
+
         @media (max-width: 768px) {
             .help-panel {
+                max-width: calc(100vw - 40px);
+            }
+        }
+
+        /* Density edit icon (fixed position, no layout impact) */
+        .density-edit-icon {
+            position: fixed;
+            bottom: 20px;
+            right: 70px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(102, 126, 234, 0.9);
+            color: white;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .density-edit-icon:hover {
+            background: rgba(102, 126, 234, 1);
+            transform: translateY(-2px);
+        }
+
+        .density-panel {
+            position: fixed;
+            bottom: 70px;
+            right: 20px;
+            max-width: 320px;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            font-size: 14px;
+            color: #2c3e50;
+            line-height: 1.5;
+        }
+
+        .density-panel h4 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .density-panel p {
+            margin-bottom: 12px;
+        }
+
+        .density-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 0;
+            margin-bottom: 12px;
+        }
+
+        .density-row input {
+            width: 70px;
+            text-align: right;
+            padding: 4px 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .density-save-btn {
+            width: 100%;
+            background: rgba(102, 126, 234, 0.9);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .density-save-btn:hover {
+            background: rgba(102, 126, 234, 1);
+        }
+
+        .density-save-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .density-save-btn .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            margin-right: 6px;
+            vertical-align: middle;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: density-spin 0.6s linear infinite;
+        }
+
+        @keyframes density-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .density-panel {
                 max-width: calc(100vw - 40px);
             }
         }
@@ -336,6 +486,17 @@
 
         <div id="dispatchContainer" class="dispatch-grid"></div>
 
+        <div class="density-box" id="densityBox">
+            <div class="density-item">
+                <div class="density-label">🌡️ Outside Temp</div>
+                <div class="density-value" id="densityTemp">--°F</div>
+            </div>
+            <div class="density-item">
+                <div class="density-label">Est. Fuel Density</div>
+                <div class="density-value" id="densityValue">-- lbs/gal</div>
+            </div>
+        </div>
+
         <div class="filter-controls">
             <label class="filter-label" for="hideDepartedToggle">Hide departed flights</label>
             <label class="toggle-switch">
@@ -350,12 +511,29 @@
     <button class="help-icon" id="helpIcon" onclick="toggleHelpPanel()">?</button>
     <div class="help-panel" id="helpPanel" style="display: none;">
         <h4>Troubleshooting</h4>
-        <p>If dispatch data stops loading: call QT Technologies support, identify as Ted / TTMSO, and ask for a
-            password reset on the TTMSO account. This re-enables the existing Company Location ID / User ID without
-            needing to change them.</p>
+        <p>If dispatch data stops loading: call QT Technologies Client Support at
+            <a href="tel:8667883241">866-788-3241</a> or email
+            <a href="mailto:QTHelpDesk@QTTechnologies.com">QTHelpDesk@QTTechnologies.com</a>, identify as Ted, and
+            ask for a password reset and/or unlock on the TTMSO account. This re-enables the existing Company
+            Location ID / User ID UUIDs without needing to change them.</p>
         <p>If the Company Location ID or User ID ever need to change: these are Vercel environment variables
             (Project Settings &rarr; Environment Variables, or the <code>vercel env</code> CLI) and require a
             redeploy. This cannot be done from within this app.</p>
+    </div>
+
+    <button class="density-edit-icon" id="densityEditIcon" onclick="toggleDensityPanel()">🌡️</button>
+    <div class="density-panel" id="densityPanel" style="display: none;">
+        <h4>Fuel Density Reading</h4>
+        <p>Enter today's observed fuel density. Estimates for other temperatures are extrapolated at &plusmn;0.01 lbs/gal per 10&deg;F.</p>
+        <div class="density-row">
+            <label for="densityReadingTemp">Fuel Temp (&deg;F)</label>
+            <input type="number" id="densityReadingTemp" step="1">
+        </div>
+        <div class="density-row">
+            <label for="densityReadingValue">Density (lbs/gal)</label>
+            <input type="number" id="densityReadingValue" step="0.01" min="0" max="9.99">
+        </div>
+        <button class="density-save-btn" id="densitySaveBtn" onclick="saveDensityReading()">Save</button>
     </div>
 
     <script>
@@ -371,6 +549,102 @@
         const LOCAL_PROXY_URL = `${window.location.protocol}//${window.location.host}`;
         const DISPATCH_ENDPOINT = '/api/dispatch';
         const POLL_INTERVAL = 30000; // 30 seconds
+
+        // Fuel density estimation (KMSO)
+        const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast?latitude=46.916&longitude=-114.090&current=temperature_2m&temperature_unit=fahrenheit';
+        const WEATHER_POLL_INTERVAL = 10 * 60 * 1000; // 10 minutes
+        const FUEL_DENSITY_SLOPE_PER_DEGREE = -0.001; // lbs/gal per °F (±0.01 per 10°F)
+        const FUEL_DENSITY_DEFAULT_READING = { temperatureF: 50, densityLbsGal: 6.79 };
+        let fuelDensityReading = { ...FUEL_DENSITY_DEFAULT_READING };
+        let lastOutsideTemp = null;
+
+        function roundTempToBracket(temp) {
+            return Math.round(temp / 10) * 10;
+        }
+
+        function densityForTemp(temp) {
+            const diff = temp - fuelDensityReading.temperatureF;
+            const density = fuelDensityReading.densityLbsGal + diff * FUEL_DENSITY_SLOPE_PER_DEGREE;
+            return Math.round(density * 100) / 100;
+        }
+
+        function applyDensity() {
+            if (lastOutsideTemp === null) return;
+            const bracket = roundTempToBracket(lastOutsideTemp);
+            document.getElementById('densityTemp').textContent = `${Math.round(lastOutsideTemp)}°F`;
+            document.getElementById('densityValue').textContent = `${densityForTemp(bracket).toFixed(2)} lbs/gal`;
+        }
+
+        async function fetchOutsideTemp() {
+            try {
+                const response = await fetch(WEATHER_URL);
+                const data = await response.json();
+                lastOutsideTemp = data.current.temperature_2m;
+                applyDensity();
+            } catch (error) {
+                console.error('Failed to fetch outside temperature:', error);
+            }
+        }
+
+        // Load the latest hydrometer reading (shared across all users via the database)
+        async function loadFuelDensityReading() {
+            try {
+                const response = await fetch(`${LOCAL_PROXY_URL}/api/fuel_density`);
+                const data = await response.json();
+                if (data.success && data.reading) {
+                    fuelDensityReading = {
+                        temperatureF: data.reading.temperature_f,
+                        densityLbsGal: data.reading.density_lbs_gal
+                    };
+                }
+            } catch (error) {
+                console.error('Failed to load fuel density reading:', error);
+            }
+            applyDensity();
+        }
+
+        async function saveDensityReading() {
+            const temperatureF = parseFloat(document.getElementById('densityReadingTemp').value);
+            const densityLbsGal = parseFloat(document.getElementById('densityReadingValue').value);
+            if (isNaN(temperatureF) || isNaN(densityLbsGal)) return;
+
+            const saveBtn = document.getElementById('densitySaveBtn');
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner"></span>Saving...';
+
+            try {
+                const response = await fetch(`${LOCAL_PROXY_URL}/api/fuel_density`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ temperatureF, densityLbsGal })
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    showError(data.error || 'Failed to save fuel density reading');
+                    return;
+                }
+                fuelDensityReading = { temperatureF, densityLbsGal: Math.round(densityLbsGal * 100) / 100 };
+                applyDensity();
+                toggleDensityPanel();
+            } catch (error) {
+                console.error('Failed to save fuel density reading:', error);
+                showError('Failed to save fuel density reading');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = 'Save';
+            }
+        }
+
+        function toggleDensityPanel() {
+            const panel = document.getElementById('densityPanel');
+            if (panel.style.display === 'none') {
+                document.getElementById('densityReadingTemp').value = fuelDensityReading.temperatureF;
+                document.getElementById('densityReadingValue').value = fuelDensityReading.densityLbsGal.toFixed(2);
+                panel.style.display = 'block';
+            } else {
+                panel.style.display = 'none';
+            }
+        }
 
         // Set up the QT session from config and load initial data
         async function initializeSession() {
@@ -647,6 +921,21 @@
             const panel = document.getElementById('helpPanel');
             panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         }
+
+        // Close help/density panels when clicking outside of them
+        document.addEventListener('click', function (event) {
+            const helpPanel = document.getElementById('helpPanel');
+            const helpIcon = document.getElementById('helpIcon');
+            if (helpPanel.style.display === 'block' && !helpPanel.contains(event.target) && event.target !== helpIcon) {
+                helpPanel.style.display = 'none';
+            }
+
+            const densityPanel = document.getElementById('densityPanel');
+            const densityEditIcon = document.getElementById('densityEditIcon');
+            if (densityPanel.style.display === 'block' && !densityPanel.contains(event.target) && event.target !== densityEditIcon) {
+                densityPanel.style.display = 'none';
+            }
+        });
 
         // Push notification functions
         let pushSubscription = null;
@@ -971,6 +1260,11 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', async function () {
             updateStatus('connecting');
+
+            // Fuel density box: fetch outside temp and the latest hydrometer reading
+            fetchOutsideTemp();
+            setInterval(fetchOutsideTemp, WEATHER_POLL_INTERVAL);
+            loadFuelDensityReading();
 
             // Get configuration from server FIRST
             try {

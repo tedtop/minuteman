@@ -37,3 +37,17 @@ AS $$
 $$;
 
 COMMENT ON TABLE tank_level_readings IS 'Time-series tank level readings. Tank configuration stored in application code.';
+
+-- Create fuel_density_readings table (hydrometer readings: fuel temp + density)
+CREATE TABLE IF NOT EXISTS fuel_density_readings (
+    id BIGSERIAL PRIMARY KEY,
+    temperature_f DECIMAL(5,2) NOT NULL,
+    density_lbs_gal DECIMAL(4,2) NOT NULL CHECK (density_lbs_gal > 0),
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fuel_density_readings_recorded
+    ON fuel_density_readings(recorded_at DESC);
+
+COMMENT ON TABLE fuel_density_readings IS 'Hydrometer readings of fuel temperature and density, used to extrapolate density estimates at other temperatures.';
