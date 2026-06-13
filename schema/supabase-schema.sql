@@ -51,3 +51,38 @@ CREATE INDEX IF NOT EXISTS idx_fuel_density_readings_recorded
     ON fuel_density_readings(recorded_at DESC);
 
 COMMENT ON TABLE fuel_density_readings IS 'Hydrometer readings of fuel temperature and density, used to extrapolate density estimates at other temperatures.';
+
+-- Dispatch history for trend analytics
+-- One row per distinct (TransactionID, ChangeFlags) state seen during polling.
+-- The UNIQUE constraint deduplicates concurrent client polls via ON CONFLICT DO NOTHING.
+-- For analytics, use the highest change_flags row per transaction_id to get final quantities.
+CREATE TABLE IF NOT EXISTS fuel_dispatch_history (
+    id                    BIGSERIAL PRIMARY KEY,
+    transaction_id        UUID NOT NULL,
+    change_flags          INTEGER NOT NULL DEFAULT 0,
+    flight_number         VARCHAR(20),
+    tail_number           VARCHAR(20),
+    aircraft_type         VARCHAR(20),
+    airline_icao_code     VARCHAR(10),
+    destination           VARCHAR(10),
+    quantity              DECIMAL(10,2),
+    quantity_in_weight    INTEGER,
+    density               DECIMAL(6,4),
+    transaction_status_id SMALLINT,
+    arrival_date          TIMESTAMPTZ,
+    departure_date        TIMESTAMPTZ,
+    recorded_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT uq_dispatch_txn_change UNIQUE (transaction_id, change_flags)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fuel_dispatch_history_flight_date
+    ON fuel_dispatch_history (flight_number, departure_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_fuel_dispatch_history_airline_date
+    ON fuel_dispatch_history (airline_icao_code, departure_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_fuel_dispatch_history_recorded
+    ON fuel_dispatch_history (recorded_at DESC);
+
+COMMENT ON TABLE fuel_dispatch_history IS 'Time-series of dispatch states from QT API polling. Used for fuel demand trend analytics per flight number per day.';

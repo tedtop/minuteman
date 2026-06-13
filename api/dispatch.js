@@ -1,3 +1,44 @@
+const { createClient } = require('@supabase/supabase-js');
+
+let supabase = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    supabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+}
+
+function parseQtDate(str) {
+    if (!str) return null;
+    return new Date(str.replace(' ', 'T') + ':00').toISOString();
+}
+
+async function recordDispatchHistory(dispatches) {
+    if (!supabase || !dispatches?.length) return;
+
+    const rows = dispatches.map(d => ({
+        transaction_id:        d.TransactionID,
+        change_flags:          d.ChangeFlags ?? 0,
+        flight_number:         d.FlightNumber        || null,
+        tail_number:           d.TailNumber          || null,
+        aircraft_type:         d.AircraftType        || null,
+        airline_icao_code:     d.AirlineIcaoCode     || null,
+        destination:           d.Destination         || null,
+        quantity:              d.Quantity            ?? null,
+        quantity_in_weight:    d.QuantityInWeight     ?? null,
+        density:               d.Density             ?? null,
+        transaction_status_id: d.TransactionStatusID ?? null,
+        arrival_date:          parseQtDate(d.ArrivalDate),
+        departure_date:        parseQtDate(d.DepartureDate),
+    }));
+
+    const { error } = await supabase
+        .from('fuel_dispatch_history')
+        .upsert(rows, { onConflict: 'transaction_id,change_flags', ignoreDuplicates: true });
+
+    if (error) console.error('fuel_dispatch_history write error:', error.message);
+}
+
 module.exports = async function handler(req, res) {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -55,8 +96,10 @@ module.exports = async function handler(req, res) {
         }
 
         const data = await response.json();
-        
-        // Pass through the QT API response
+
+        recordDispatchHistory(data?.Detail?.Dispatches)
+            .catch(e => console.error('dispatch history async error:', e));
+
         return res.json(data);
 
     } catch (error) {
