@@ -7,6 +7,7 @@
     <title>Fuel Farm Monitor</title>
     <link rel="stylesheet" href="common.css">
     <script src="gallons-tables.js"></script>
+    <script src="weather-widget.js"></script>
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" href="/icons/icon-192.png">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -307,10 +308,12 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>⛽ Fuel Farm Levels</h1>
-            <div class="status connecting" id="status">🟡 Loading...</div>
-            <div class="nav-buttons">
-                <a href="/fuel_dispatch">✈️ Fuel Dispatch</a>
+            <div class="header-main">
+                <h1>⛽ Fuel Farm Levels</h1>
+                <div class="status connecting" id="status">🟡 Loading...</div>
+                <div class="nav-buttons">
+                    <a href="/fuel_dispatch">✈️ Fuel Dispatch</a>
+                </div>
             </div>
         </div>
 
@@ -457,7 +460,7 @@
 
                 <div class="level-info">
                     <div class="current-level">${tank.level}"</div>
-                    <div class="level-percentage">${percentage}% (${tank.usableMax}" usable)</div>
+                    <div class="level-percentage">${percentage}% (${tank.usableMax}" max)</div>
                     <div class="level-gallons">${Math.round(inchesToGallons(tankId, tank.level)).toLocaleString()} gal</div>
                 </div>
 

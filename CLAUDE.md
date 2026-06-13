@@ -78,6 +78,20 @@ The app includes PWA push notification functionality that automatically sends no
 - **Enhanced Notification Categories**: Create specific notification types for each change category
 - **Change History**: Track and display what specifically changed in each dispatch update
 
+## PWA Service Worker Caching
+`public/sw.js` precaches the app shell (`fuel_dispatch.html`, `common.css`,
+`manifest.json`) under `CACHE_NAME` and serves them **cache-first** —
+`caches.match(event.request) || fetch(...)`. This means once a file is
+cached, installed PWAs keep serving that exact version forever, even after a
+new deploy, until `CACHE_NAME` changes (which triggers `cache.addAll` again on
+`install` and deletes the old cache on `activate`).
+
+**Whenever `fuel_dispatch.html`, `common.css`, or `manifest.json` change,
+bump `CACHE_NAME` (e.g. `fuel-dispatch-v2` → `v3`)** so installed PWAs pick up
+the update on next load. Forgetting this is a recurring source of "stale
+shell" bugs (e.g. old API endpoints, missing UI elements) on phones that have
+the app added to the home screen.
+
 ## Fuel Farm Enhancements (TODO)
 - **Enhanced Tank Level Visual Indicators**: Make tank level displays prettier with color-coded zones:
   - Red zones for unusable fuel areas (below usable minimum)

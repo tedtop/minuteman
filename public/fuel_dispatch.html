@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Fuel Dispatch Monitor</title>
     <link rel="stylesheet" href="common.css">
+    <script src="weather-widget.js"></script>
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" href="/icons/icon-192.png">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -182,48 +183,6 @@
             font-size: 18px;
             font-weight: 700;
             color: #2c3e50;
-        }
-
-        /* Weather widget (desktop only, top-right of header) */
-        .weather-widget {
-            display: none;
-        }
-
-        @media (min-width: 769px) {
-            .header {
-                position: relative;
-            }
-
-            .weather-widget {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                position: absolute;
-                top: 20px;
-                right: 20px;
-                padding: 10px 16px;
-                border: 2px solid #667eea;
-                border-radius: 12px;
-                background: rgba(102, 126, 234, 0.05);
-                text-align: left;
-            }
-
-            .weather-icon {
-                font-size: 32px;
-                line-height: 1;
-            }
-
-            .weather-temp {
-                font-size: 20px;
-                font-weight: 700;
-                color: #2c3e50;
-            }
-
-            .weather-desc,
-            .weather-wind {
-                font-size: 12px;
-                color: #666;
-            }
         }
 
         /* Filter toggle styles */
@@ -516,18 +475,12 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>✈️ Fuel Dispatch Monitor</h1>
-            <div class="status" id="status">Connecting...</div>
-            <div class="nav-buttons">
-                <a href="/fuel_farm">⛽ Fuel Farm</a>
-                <!-- <button onclick="testPushNotification()" class="test-push-btn">⛽ Send Latest Dispatch</button> -->
-            </div>
-            <div class="weather-widget" id="weatherWidget">
-                <div class="weather-icon" id="weatherIcon">🌡️</div>
-                <div class="weather-details">
-                    <div class="weather-temp" id="weatherTemp">--°F</div>
-                    <div class="weather-desc" id="weatherDesc">--</div>
-                    <div class="weather-wind" id="weatherWind">Wind: -- mph</div>
+            <div class="header-main">
+                <h1>✈️ Fuel Dispatch Monitor</h1>
+                <div class="status" id="status">Connecting...</div>
+                <div class="nav-buttons">
+                    <a href="/fuel_farm">⛽ Fuel Farm</a>
+                    <!-- <button onclick="testPushNotification()" class="test-push-btn">⛽ Send Latest Dispatch</button> -->
                 </div>
             </div>
         </div>
@@ -600,43 +553,7 @@
         const DISPATCH_ENDPOINT = '/api/dispatch';
         const POLL_INTERVAL = 30000; // 30 seconds
 
-        // Fuel density estimation + weather widget (KMSO)
-        const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast?latitude=46.916&longitude=-114.090&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m&temperature_unit=fahrenheit&wind_speed_unit=mph';
-        const WEATHER_POLL_INTERVAL = 10 * 60 * 1000; // 10 minutes
-
-        // WMO weather codes -> [icon, label]
-        const WEATHER_CODES = {
-            0: ['☀️', 'Clear'],
-            1: ['🌤️', 'Mostly Clear'],
-            2: ['⛅', 'Partly Cloudy'],
-            3: ['☁️', 'Overcast'],
-            45: ['🌫️', 'Fog'],
-            48: ['🌫️', 'Fog'],
-            51: ['🌦️', 'Light Drizzle'],
-            53: ['🌦️', 'Drizzle'],
-            55: ['🌦️', 'Heavy Drizzle'],
-            56: ['🌧️', 'Freezing Drizzle'],
-            57: ['🌧️', 'Freezing Drizzle'],
-            61: ['🌧️', 'Light Rain'],
-            63: ['🌧️', 'Rain'],
-            65: ['🌧️', 'Heavy Rain'],
-            66: ['🌧️', 'Freezing Rain'],
-            67: ['🌧️', 'Freezing Rain'],
-            71: ['🌨️', 'Light Snow'],
-            73: ['🌨️', 'Snow'],
-            75: ['❄️', 'Heavy Snow'],
-            77: ['❄️', 'Snow Grains'],
-            80: ['🌦️', 'Rain Showers'],
-            81: ['🌧️', 'Rain Showers'],
-            82: ['⛈️', 'Heavy Showers'],
-            85: ['🌨️', 'Snow Showers'],
-            86: ['🌨️', 'Snow Showers'],
-            95: ['⛈️', 'Thunderstorm'],
-            96: ['⛈️', 'Thunderstorm'],
-            99: ['⛈️', 'Thunderstorm']
-        };
-        const WIND_COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
-            'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+        // Fuel density estimation (driven by the shared weather widget's "weather:update" event)
         const FUEL_DENSITY_SLOPE_PER_DEGREE = -0.001; // lbs/gal per °F (±0.01 per 10°F)
         const FUEL_DENSITY_DEFAULT_READING = { temperatureF: 50, densityLbsGal: 6.79 };
         let fuelDensityReading = { ...FUEL_DENSITY_DEFAULT_READING };
@@ -659,26 +576,10 @@
             document.getElementById('densityValue').textContent = `${densityForTemp(bracket).toFixed(2)} lbs/gal`;
         }
 
-        function applyWeatherWidget(current) {
-            const [icon, label] = WEATHER_CODES[current.weather_code] || ['🌡️', '--'];
-            const windDir = WIND_COMPASS[Math.round(current.wind_direction_10m / 22.5) % 16];
-            document.getElementById('weatherIcon').textContent = icon;
-            document.getElementById('weatherTemp').textContent = `${Math.round(current.temperature_2m)}°F`;
-            document.getElementById('weatherDesc').textContent = label;
-            document.getElementById('weatherWind').textContent = `Wind: ${Math.round(current.wind_speed_10m)} mph ${windDir}`;
-        }
-
-        async function fetchOutsideTemp() {
-            try {
-                const response = await fetch(WEATHER_URL);
-                const data = await response.json();
-                lastOutsideTemp = data.current.temperature_2m;
-                applyDensity();
-                applyWeatherWidget(data.current);
-            } catch (error) {
-                console.error('Failed to fetch outside temperature:', error);
-            }
-        }
+        window.addEventListener('weather:update', function (event) {
+            lastOutsideTemp = event.detail.temperature_2m;
+            applyDensity();
+        });
 
         // Load the latest hydrometer reading (shared across all users via the database)
         async function loadFuelDensityReading() {
@@ -1355,9 +1256,8 @@
         document.addEventListener('DOMContentLoaded', async function () {
             updateStatus('connecting');
 
-            // Fuel density box: fetch outside temp and the latest hydrometer reading
-            fetchOutsideTemp();
-            setInterval(fetchOutsideTemp, WEATHER_POLL_INTERVAL);
+            // Fuel density box: load the latest hydrometer reading (current outside
+            // temp arrives via the shared weather widget's "weather:update" event)
             loadFuelDensityReading();
 
             // Get configuration from server FIRST

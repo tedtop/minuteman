@@ -137,6 +137,137 @@ body {
     text-align: center;
 }
 
+/* Weather card (desktop only, injected by weather-widget.js) */
+.weather-widget {
+    display: none;
+}
+
+@media (min-width: 1100px) {
+    .header {
+        display: grid;
+        grid-template-columns: minmax(420px, 1fr) auto minmax(420px, 1fr);
+        align-items: flex-start;
+        gap: 20px;
+    }
+
+    .weather-widget {
+        display: block;
+        justify-self: end;
+        width: 420px;
+        padding: 14px 18px;
+        border: 2px solid #667eea;
+        border-radius: 12px;
+        background: rgba(102, 126, 234, 0.05);
+        text-align: left;
+    }
+
+    .weather-top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .weather-icon {
+        font-size: 30px;
+        line-height: 1;
+    }
+
+    .weather-temp {
+        font-size: 22px;
+        font-weight: 700;
+        color: #2c3e50;
+    }
+
+    .weather-desc {
+        font-size: 13px;
+        color: #666;
+        margin-left: auto;
+        text-align: right;
+    }
+
+    .weather-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px 10px;
+        margin-bottom: 10px;
+    }
+
+    .weather-grid > div {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .wp-label {
+        font-size: 10px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .wp-value {
+        font-size: 13px;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+}
+
+/* Flight category badges (VFR/MVFR/IFR/LIFR) */
+.flight-cat {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.flight-cat.vfr {
+    background: #28a745;
+    color: #fff;
+}
+
+.flight-cat.mvfr {
+    background: #1e88e5;
+    color: #fff;
+}
+
+.flight-cat.ifr {
+    background: #dc3545;
+    color: #fff;
+}
+
+.flight-cat.lifr {
+    background: #c2185b;
+    color: #fff;
+}
+
+.metar-raw {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: #444;
+    background: rgba(102, 126, 234, 0.07);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    word-break: break-all;
+}
+
+.weather-panel-link {
+    display: block;
+    text-align: center;
+    color: #667eea;
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.weather-panel-link:hover {
+    text-decoration: underline;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
     .container {
