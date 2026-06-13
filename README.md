@@ -1,81 +1,100 @@
 # Minuteman Fuel Dashboard
 
-A serverless web application for monitoring fuel dispatch operations and managing fuel farm tank levels.
+Serverless web app for monitoring fuel dispatch operations and fuel farm tank levels at KMSO. Runs on Vercel with a Supabase backend.
 
-## Features
+## Local Development
 
-- **Fuel Dispatch Monitor**: Real-time QT Technologies dispatch data
-- **Fuel Farm Monitor**: Tank level tracking with Supabase persistence
-- **Client-Side Authentication**: Each browser handles its own QT session
-- **Serverless Architecture**: Runs on Vercel with auto-scaling
+**Prerequisites:** Node.js 18+, Vercel CLI (`npm i -g vercel`)
 
-## Quick Start
+```bash
+npm install
+cp .env.example .env.local   # fill in credentials
+npm run dev                  # http://localhost:3000
+```
 
-### Prerequisites
-- Node.js (version 18 or higher)
-- Vercel CLI (`npm install -g vercel`)
-- QT Technologies account credentials
-- Supabase account (for fuel farm persistence)
+- Fuel Dispatch: http://localhost:3000/fuel_dispatch
+- Fuel Farm: http://localhost:3000/fuel_farm
 
-### Local Development
+## Environment Variables
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+```bash
+# QT Technologies
+QT_COMPANY_LOCATION_ID=your_company_location_id
+QT_USER_ID=your_user_id
 
-2. **Configure environment variables:**
-   ```bash
-   cp .env.example .env.local
-   # Edit .env.local with your credentials
-   ```
+# Supabase
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-3. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
+# Push notifications (optional)
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_EMAIL=...
+```
 
-4. **Open the applications:**
-   - Fuel Dispatch: http://localhost:3000/fuel_dispatch
-   - Fuel Farm: http://localhost:3000/fuel_farm
+## Deploy
 
-## Architecture
+**Local** (`http://localhost:3000`):
+```bash
+npm run dev
+```
 
-Built on Vercel serverless functions with:
+**Preview** (temporary Vercel URL for testing before going live):
+```bash
+vercel
+```
 
-- **API Functions**: `/api/` directory contains all serverless endpoints
-- **Static Files**: `/public/` directory for HTML interfaces  
-- **Client-Side Auth**: Browsers manage QT authentication cookies
-- **Database**: Supabase for fuel tank level persistence
-
-## Applications
-
-### Fuel Dispatch Monitor
-- Real-time dispatch data from QT Technologies
-- Automatic authentication and session management
-- 30-second polling for live updates
-- Responsive design for desktop and mobile
-
-### Fuel Farm Monitor
-- Tank level tracking and updates
-- Persistent storage in Supabase
-- Real-time fuel capacity calculations
-- Tank configuration in application code
-
-## Deployment
-
-### Automatic (Recommended)
-1. Connect GitHub repository to Vercel
-2. Set environment variables in Vercel dashboard
-3. Push to main branch for automatic deployment
-
-### Manual
+**Production**:
 ```bash
 vercel --prod
 ```
+Or push to `master` — Vercel auto-deploys on every commit.
 
-## Documentation
+Environment variables are managed in the Vercel dashboard (Project Settings → Environment Variables). After adding or changing a variable, redeploy for it to take effect.
 
-- `README_DEVELOPMENT.md` - Detailed development setup
-- `SUPABASE_SETUP.md` - Database configuration guide
-- `CLAUDE.md` - Project context for AI assistance
+## Project Structure
+
+```
+api/                        # Vercel serverless functions
+  config.js                 # Serves env vars to the client
+  dispatch.js               # QT Technologies dispatch proxy
+  metar.js                  # KMSO METAR proxy
+  fuel_density.js           # Fuel density readings
+  subscribe-push.js         # Push notification subscriptions
+  dispatch-push.js          # Sends push on dispatch changes
+  fuel_farm/
+    tanks.js                # Tank level reads/writes
+    tank-history.js         # Historical readings for Jet A trend chart
+public/                     # Frontend
+  fuel_dispatch.html
+  fuel_farm.html
+  common.css
+  weather-widget.js
+  gallons-tables.js         # Inches → gallons lookup tables
+schema/                     # Reference docs and DB schema
+  supabase-schema.sql
+  SUPABASE_SETUP.md
+```
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/config` | App configuration |
+| POST | `/api/dispatch` | QT dispatch data |
+| GET | `/api/metar` | KMSO weather |
+| GET/POST | `/api/fuel_density` | Fuel density readings |
+| GET/POST | `/api/fuel_farm/tanks` | Tank levels |
+| GET | `/api/fuel_farm/tank-history` | Historical tank readings |
+| POST | `/api/subscribe-push` | Register push subscription |
+
+## Push Notifications
+
+Push notification code exists (`subscribe-push.js`, `dispatch-push.js`, `shared-store.js`, `test-push.js`) but doesn't work reliably in practice — delivery is inconsistent and the subscription store is in-memory, so it resets on every cold start. The UI button to send a test notification is hidden. The code is kept as a starting point for future experimentation if this is ever worth revisiting.
+
+## Debugging
+
+- Client errors: browser console
+- Server errors: terminal running `vercel dev`
+- API calls: browser DevTools → Network tab
+- Never commit `.env.local` or secrets
