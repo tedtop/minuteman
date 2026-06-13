@@ -27,9 +27,13 @@ const tankConfig = {
         minLevel: 1, maxLevel: 96, usableMin: 16, usableMax: 86,
         fuelType: 'Jet A', capacity: 12000, name: 'Tank 6' 
     },
-    T7: { 
+    T7: {
         minLevel: 1, maxLevel: 114, usableMin: 14, usableMax: 93,
-        fuelType: 'Jet A', capacity: 18034, name: 'Tank 7' 
+        fuelType: 'Jet A', capacity: 18034, name: 'Tank 7'
+    },
+    LF: {
+        minLevel: 1, maxLevel: 104, usableMin: 1, usableMax: 104,
+        fuelType: 'Jet A', capacity: 10000, name: 'Life Flight'
     }
 };
 

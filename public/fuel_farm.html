@@ -58,6 +58,17 @@
             box-shadow: 0 12px 40px rgba(255, 193, 7, 0.3);
         }
 
+        /* Special styling for Life Flight - outside containment area (currently same as T7) */
+        .tank-card.lf {
+            background: rgba(255, 248, 220, 0.98);
+            border: 2px solid #ffc107;
+            box-shadow: 0 8px 32px rgba(255, 193, 7, 0.2);
+        }
+
+        .tank-card.lf:hover {
+            box-shadow: 0 12px 40px rgba(255, 193, 7, 0.3);
+        }
+
         /* Divider before T7 to show separation */
         .containment-divider {
             display: flex;
@@ -372,17 +383,15 @@
             const container = document.getElementById('tanksContainer');
             container.innerHTML = '';
 
-            // Sort tanks to ensure T1-T6 come first, then T7
-            const sortedTanks = Object.entries(tanks).sort(([a], [b]) => {
-                // Extract tank numbers for proper sorting
-                const aNum = parseInt(a.replace('T', ''));
-                const bNum = parseInt(b.replace('T', ''));
-                return aNum - bNum;
-            });
+            // Fixed display order: containment tanks, then T7, then Life Flight
+            const tankOrder = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'LF'];
+            const sortedTanks = tankOrder
+                .filter(tankId => tanks[tankId])
+                .map(tankId => [tankId, tanks[tankId]]);
 
             sortedTanks.forEach(([tankId, tank], index) => {
-                // Add divider before T7 to show it's outside containment area
-                if (tankId === 'T7') {
+                // Add divider before tanks outside the main containment area (T7, Life Flight)
+                if (tankId === 'T7' || tankId === 'LF') {
                     const divider = document.createElement('div');
                     divider.className = 'containment-divider';
                     container.appendChild(divider);
@@ -396,14 +405,16 @@
         function createTankCard(tankId, tank) {
             const card = document.createElement('div');
             card.className = 'tank-card';
-            
-            // Add special styling for T7 (outside containment area)
+
+            // Add special styling for tanks outside the main containment area
             if (tankId === 'T7') {
                 card.className += ' t7';
+            } else if (tankId === 'LF') {
+                card.className += ' lf';
             }
 
-            const percentage = Math.round((tank.level / tank.maxLevel) * 100);
-            const levelHeight = (tank.level / tank.maxLevel) * 100;
+            const percentage = Math.min(100, Math.round((tank.level / tank.usableMax) * 100));
+            const levelHeight = Math.min(100, (tank.level / tank.usableMax) * 100);
             const fuelTypeClass = tank.fuelType === 'Avgas' ? 'avgas' : 'jet-a';
 
             card.innerHTML = `
@@ -415,13 +426,13 @@
                 <div class="tank-visual">
                     <div class="fuel-level ${fuelTypeClass}" style="height: ${levelHeight}%"></div>
                     <div class="level-markers">
-                        ${generateMarkers()}
+                        ${generateMarkers(tank.usableMax)}
                     </div>
                 </div>
 
                 <div class="level-info">
                     <div class="current-level">${tank.level}"</div>
-                    <div class="level-percentage">${percentage}% (${tank.maxLevel}" max)</div>
+                    <div class="level-percentage">${percentage}% (${tank.usableMax}" usable)</div>
                 </div>
 
                 <div class="update-section">
@@ -448,10 +459,10 @@
             return card;
         }
 
-        function generateMarkers() {
+        function generateMarkers(usableMax) {
             let markers = '';
-            for (let i = 0; i <= 86; i += 10) {
-                const position = ((86 - i) / 86) * 100;
+            for (let i = 0; i <= usableMax; i += 10) {
+                const position = ((usableMax - i) / usableMax) * 100;
                 const isMajor = i % 20 === 0;
                 markers += `<div class="marker ${isMajor ? 'major' : ''}" style="top: ${position}%"></div>`;
             }
@@ -495,7 +506,7 @@
 
         async function updateTankLevel(tankId) {
             const input = document.getElementById(`input-${tankId}`);
-            const level = parseFootInchToInches(input.value.trim());
+            let level = parseFootInchToInches(input.value.trim());
             const tank = tanks[tankId];
 
             // Convert to inches first, then validate
@@ -504,10 +515,15 @@
                 return;
             }
 
-            // Check tank limits
-            if (level < tank.minLevel || level > tank.maxLevel) {
-                showError(`${tankId} must be between ${tank.minLevel}" and ${tank.maxLevel}"`);
+            // Check low-end tank limit
+            if (level < tank.minLevel) {
+                showError(`${tankId} must be at least ${tank.minLevel}"`);
                 return;
+            }
+
+            // Floor entries above the usable max instead of rejecting them
+            if (level > tank.usableMax) {
+                level = tank.usableMax;
             }
 
             // Update the display immediately for better UX (works even offline)
