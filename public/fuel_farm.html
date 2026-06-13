@@ -332,17 +332,25 @@
             }, 30000);
         });
 
+        function isUserEnteringData() {
+            const active = document.activeElement;
+            return active && active.classList.contains('level-input') && active.value.trim() !== '';
+        }
+
         async function loadTankData() {
             // Show loading status while fetching data
             updateStatus('loading');
-            
+
             try {
                 const response = await fetch(`${API_BASE_URL}/tanks`);
                 const data = await response.json();
 
                 if (data.success) {
                     tanks = data.tanks;
-                    renderTanks();
+                    // Don't blow away an in-progress edit on a focused input
+                    if (!isUserEnteringData()) {
+                        renderTanks();
+                    }
                     // Only show refresh counter if database is connected and working
                     if (data.dbConnected) {
                         startRefreshCounter();
