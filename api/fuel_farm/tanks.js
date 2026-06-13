@@ -46,22 +46,6 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     );
 }
 
-async function testConnection() {
-    if (!supabase) return false;
-
-    try {
-        const { data, error } = await supabase
-            .from('tank_level_readings')
-            .select('id')
-            .limit(1);
-
-        return !error;
-    } catch (error) {
-        console.error('Database connection test failed:', error);
-        return false;
-    }
-}
-
 async function getLatestReadings() {
     if (!supabase) throw new Error('Database not configured');
 
@@ -100,8 +84,6 @@ module.exports = async function handler(req, res) {
     }
 
     try {
-        const dbConnected = await testConnection();
-
         if (req.method === 'GET') {
             // Get all tank levels
             let tanks = {};
@@ -121,22 +103,22 @@ module.exports = async function handler(req, res) {
                 };
             }
 
-            if (dbConnected) {
-                try {
-                    // Get latest readings from database
-                    const latestReadings = await getLatestReadings();
+            // Get latest readings from database
+            let dbConnected = true;
+            try {
+                const latestReadings = await getLatestReadings();
 
-                    // Merge readings with config
-                    latestReadings.forEach(reading => {
-                        if (tanks[reading.tank_id]) {
-                            tanks[reading.tank_id].level = reading.level;
-                            tanks[reading.tank_id].lastUpdated = reading.recorded_at;
-                        }
-                    });
-                } catch (error) {
-                    console.error('Failed to get latest readings:', error);
-                    // Continue with default levels
-                }
+                // Merge readings with config
+                latestReadings.forEach(reading => {
+                    if (tanks[reading.tank_id]) {
+                        tanks[reading.tank_id].level = reading.level;
+                        tanks[reading.tank_id].lastUpdated = reading.recorded_at;
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to get latest readings:', error);
+                dbConnected = false;
+                // Continue with default levels
             }
 
             return res.json({
@@ -165,16 +147,13 @@ module.exports = async function handler(req, res) {
                 });
             }
 
-            // Check database connection
-            if (!dbConnected) {
-                return res.status(503).json({
-                    success: false,
-                    error: 'Database not available.'
-                });
-            }
-
             // Record in database
-            await recordTankLevel(tankId, level);
+            try {
+                await recordTankLevel(tankId, level);
+            } catch (error) {
+                console.error('Failed to record tank level:', error);
+                return res.status(503).json({ success: false, error: 'Database not available.' });
+            }
 
             // Return updated tank info
             const updatedTank = {

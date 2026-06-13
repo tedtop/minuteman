@@ -70,7 +70,9 @@
     function injectMarkup() {
         const header = document.querySelector('.header');
         if (!header) return;
-        header.insertAdjacentHTML('afterbegin', '<div class="header-left"></div>');
+        if (!header.querySelector('.header-left')) {
+            header.insertAdjacentHTML('afterbegin', '<div class="header-left"></div>');
+        }
         header.insertAdjacentHTML('beforeend', `<div class="weather-widget" id="weatherWidget">${WIDGET_HTML}</div>`);
     }
 

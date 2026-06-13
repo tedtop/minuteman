@@ -308,6 +308,37 @@
 <body>
     <div class="container">
         <div class="header">
+            <div class="header-left">
+                <div class="trend-widget" id="jetATrendWidget">
+                    <div class="trend-header">
+                        <span class="trend-title">Jet A Trend (T2-T7)</span>
+                        <span class="trend-total" id="trendTotal">-- gal</span>
+                    </div>
+                    <div class="trend-minmax" id="trendMinMax"></div>
+                    <div class="trend-chart-wrap" id="trendChartWrap">
+                        <svg class="trend-chart" id="trendChart" viewBox="0 0 400 150" preserveAspectRatio="none">
+                            <polyline id="trendArea" class="trend-area" points=""></polyline>
+                            <polyline id="trendLine" class="trend-line" points=""></polyline>
+                            <line id="trendHoverLine" class="trend-hover-line" x1="0" y1="0" x2="0" y2="150" style="display: none;"></line>
+                            <circle id="trendHoverDot" class="trend-hover-dot" r="3" style="display: none;"></circle>
+                        </svg>
+                        <div class="trend-tooltip" id="trendTooltip" style="display: none;"></div>
+                        <div class="trend-loading" id="trendLoading" style="display: none;">
+                            <div class="trend-spinner"></div>
+                        </div>
+                    </div>
+                    <div class="trend-zoom" id="trendZoom">
+                        <button class="trend-zoom-btn" data-range="7d">7D</button>
+                        <button class="trend-zoom-btn" data-range="30d">30D</button>
+                        <button class="trend-zoom-btn active" data-range="90d">90D</button>
+                        <button class="trend-zoom-btn" data-range="120d">120D</button>
+                        <button class="trend-zoom-btn" data-range="6mo">6M</button>
+                        <button class="trend-zoom-btn" data-range="12mo">1Y</button>
+                        <button class="trend-zoom-btn" data-range="all">All</button>
+                    </div>
+                    <div class="trend-empty" id="trendEmpty" style="display: none;">No history yet</div>
+                </div>
+            </div>
             <div class="header-main">
                 <h1>⛽ Fuel Farm Levels</h1>
                 <div class="status connecting" id="status">🟡 Loading...</div>
@@ -324,7 +355,14 @@
 
     <script>
         const API_BASE_URL = `${window.location.protocol}//${window.location.host}/api/fuel_farm`;
+        const JET_A_TANKS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+        const TREND_HISTORY_POLL_INTERVAL = 10 * 60 * 1000; // 10 minutes
+        const TREND_CACHE_PREFIX = 'jetATrendHistory:';
         let tanks = {};
+        let trendHistory = null; // { range, since, baseline, readings }
+        let trendRange = '90d';
+        let trendChartPoints = [];
+        let trendChartScale = null; // { minTime, maxTime, minTotal, maxTotal, width, height, pad }
         let refreshCountdown = 30;
         let countdownInterval;
 
@@ -337,6 +375,11 @@
 
             // Load initial data
             loadTankData();
+
+            loadJetATrendHistory(trendRange);
+            setInterval(() => loadJetATrendHistory(trendRange), TREND_HISTORY_POLL_INTERVAL);
+            setupTrendZoom();
+            setupTrendHover();
 
             // Start refresh cycle - will be managed based on connection status
             refreshInterval = setInterval(() => {
@@ -371,6 +414,7 @@
                     if (!isUserEnteringData()) {
                         renderTanks();
                     }
+                    updateJetATrend();
                     // Only show refresh counter if database is connected and working
                     if (data.dbConnected) {
                         startRefreshCounter();
@@ -427,6 +471,203 @@
 
                 const tankCard = createTankCard(tankId, tank);
                 container.appendChild(tankCard);
+            });
+        }
+
+        // --- Jet A trend widget (T2-T7 total gallons, header-left) ---
+
+        function jetATotalGallons(levels) {
+            return JET_A_TANKS.reduce((sum, tankId) => {
+                const level = levels[tankId];
+                return sum + (level != null ? inchesToGallons(tankId, level) : 0);
+            }, 0);
+        }
+
+        function setTrendLoading(isLoading) {
+            const el = document.getElementById('trendLoading');
+            if (el) el.style.display = isLoading ? 'flex' : 'none';
+        }
+
+        function getTrendCache(range) {
+            try {
+                const raw = localStorage.getItem(TREND_CACHE_PREFIX + range);
+                return raw ? JSON.parse(raw) : null;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function setTrendCache(range, data) {
+            try {
+                localStorage.setItem(TREND_CACHE_PREFIX + range, JSON.stringify(data));
+            } catch (error) {
+                // localStorage unavailable/full - not critical, just skip caching
+            }
+        }
+
+        // Historical readings rarely change, so render a cached copy instantly
+        // (no spinner) while quietly refetching in the background to pick up
+        // any new readings recorded since the cache was written.
+        async function loadJetATrendHistory(range) {
+            const cached = getTrendCache(range);
+            if (cached) {
+                trendHistory = cached;
+                updateJetATrend();
+            } else {
+                setTrendLoading(true);
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/tank-history?range=${range}`);
+                const data = await response.json();
+                if (data.success) {
+                    setTrendCache(range, data);
+                    if (range === trendRange) {
+                        trendHistory = data;
+                        updateJetATrend();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading Jet A trend history:', error);
+            } finally {
+                setTrendLoading(false);
+            }
+        }
+
+        function setupTrendZoom() {
+            document.querySelectorAll('.trend-zoom-btn').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    if (this.dataset.range === trendRange) return;
+                    trendRange = this.dataset.range;
+                    document.querySelectorAll('.trend-zoom-btn').forEach(b => b.classList.toggle('active', b === this));
+                    loadJetATrendHistory(trendRange);
+                });
+            });
+        }
+
+        function updateJetATrend() {
+            const totalEl = document.getElementById('trendTotal');
+            if (!totalEl) return;
+
+            const liveLevels = {};
+            JET_A_TANKS.forEach(tankId => {
+                if (tanks[tankId]) liveLevels[tankId] = tanks[tankId].level;
+            });
+            const currentTotal = jetATotalGallons(liveLevels);
+            totalEl.textContent = `${Math.round(currentTotal).toLocaleString()} gal`;
+
+            if (!trendHistory) return;
+
+            const hasHistory = trendHistory.readings.length > 0 || Object.keys(trendHistory.baseline).length > 0;
+            document.getElementById('trendEmpty').style.display = hasHistory ? 'none' : 'block';
+            document.getElementById('trendChartWrap').style.display = hasHistory ? 'block' : 'none';
+            if (!hasHistory) {
+                document.getElementById('trendMinMax').textContent = '';
+                return;
+            }
+
+            // Walk the baseline + readings to build a running total over time,
+            // then append the live "now" total as the final point. "All" range
+            // has no baseline/since - it starts from whatever the first reading is.
+            const levels = { ...trendHistory.baseline };
+            const points = [];
+
+            if (trendHistory.since !== null) {
+                points.push({ time: new Date(trendHistory.since).getTime(), total: jetATotalGallons(levels) });
+            }
+
+            trendHistory.readings.forEach(reading => {
+                levels[reading.tankId] = reading.level;
+                points.push({ time: new Date(reading.recordedAt).getTime(), total: jetATotalGallons(levels) });
+            });
+
+            points.push({ time: Date.now(), total: currentTotal });
+
+            renderTrendChart(points);
+
+            const totals = points.map(p => p.total);
+            const low = Math.round(Math.min(...totals)).toLocaleString();
+            const high = Math.round(Math.max(...totals)).toLocaleString();
+            document.getElementById('trendMinMax').textContent = `Low ${low} gal · High ${high} gal`;
+        }
+
+        function renderTrendChart(points) {
+            const width = 400, height = 150, pad = 4;
+
+            const times = points.map(p => p.time);
+            const totals = points.map(p => p.total);
+
+            trendChartPoints = points;
+            trendChartScale = {
+                minTime: Math.min(...times),
+                maxTime: Math.max(...times),
+                minTotal: Math.min(...totals),
+                maxTotal: Math.max(...totals),
+                width, height, pad
+            };
+
+            const linePoints = points.map(p => `${trendX(p.time).toFixed(1)},${trendY(p.total).toFixed(1)}`).join(' ');
+            const areaPoints = `${pad},${height - pad} ${linePoints} ${width - pad},${height - pad}`;
+
+            document.getElementById('trendArea').setAttribute('points', areaPoints);
+            document.getElementById('trendLine').setAttribute('points', linePoints);
+        }
+
+        function trendX(t) {
+            const { minTime, maxTime, width, pad } = trendChartScale;
+            const range = (maxTime - minTime) || 1;
+            return pad + ((t - minTime) / range) * (width - pad * 2);
+        }
+
+        function trendY(v) {
+            const { minTotal, maxTotal, height, pad } = trendChartScale;
+            const range = (maxTotal - minTotal) || 1;
+            return height - pad - ((v - minTotal) / range) * (height - pad * 2);
+        }
+
+        function setupTrendHover() {
+            const wrap = document.getElementById('trendChartWrap');
+            const svg = document.getElementById('trendChart');
+            const tooltip = document.getElementById('trendTooltip');
+            const hoverLine = document.getElementById('trendHoverLine');
+            const hoverDot = document.getElementById('trendHoverDot');
+
+            wrap.addEventListener('mousemove', function (e) {
+                if (!trendChartScale || trendChartPoints.length === 0) return;
+
+                const rect = svg.getBoundingClientRect();
+                const relX = ((e.clientX - rect.left) / rect.width) * trendChartScale.width;
+
+                let nearest = trendChartPoints[0];
+                let nearestDist = Math.abs(relX - trendX(nearest.time));
+                for (const point of trendChartPoints) {
+                    const dist = Math.abs(relX - trendX(point.time));
+                    if (dist < nearestDist) {
+                        nearest = point;
+                        nearestDist = dist;
+                    }
+                }
+
+                const x = trendX(nearest.time);
+                const y = trendY(nearest.total);
+
+                hoverLine.setAttribute('x1', x);
+                hoverLine.setAttribute('x2', x);
+                hoverLine.style.display = 'block';
+                hoverDot.setAttribute('cx', x);
+                hoverDot.setAttribute('cy', y);
+                hoverDot.style.display = 'block';
+
+                const dateLabel = new Date(nearest.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                tooltip.textContent = `${dateLabel}: ${Math.round(nearest.total).toLocaleString()} gal`;
+                tooltip.style.left = `${(x / trendChartScale.width) * 100}%`;
+                tooltip.style.display = 'block';
+            });
+
+            wrap.addEventListener('mouseleave', function () {
+                hoverLine.style.display = 'none';
+                hoverDot.style.display = 'none';
+                tooltip.style.display = 'none';
             });
         }
 
