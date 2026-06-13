@@ -1,0 +1,407 @@
+<mxfile host="app.diagrams.net" modified="2025-10-21T00:00:00.000Z" agent="Claude Code" version="21.0.0">
+  <diagram name="Fuel Dispatch E-R Diagram" id="fuel-dispatch-er">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ENTITY: AIRCRAFT -->
+        <mxCell id="aircraft-entity" value="AIRCRAFT" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="80" y="40" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="aircraft-tail" value="&lt;u&gt;tail_number&lt;/u&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="20" y="100" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="aircraft-type" value="aircraft_type" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="100" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="aircraft-icao" value="airline_icao" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="100" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="aircraft-fleet" value="fleet_id" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="150" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="aircraft-cert-required" value="requires_cert" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="190" y="150" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="aircraft-tail-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.25;exitY=1;" edge="1" parent="1" source="aircraft-entity" target="aircraft-tail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aircraft-type-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.5;exitY=1;" edge="1" parent="1" source="aircraft-entity" target="aircraft-type">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aircraft-icao-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.75;exitY=1;" edge="1" parent="1" source="aircraft-entity" target="aircraft-icao">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aircraft-fleet-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.35;exitY=1;" edge="1" parent="1" source="aircraft-entity" target="aircraft-fleet">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aircraft-cert-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.65;exitY=1;" edge="1" parent="1" source="aircraft-entity" target="aircraft-cert-required">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ENTITY: FLIGHT -->
+        <mxCell id="flight-entity" value="FLIGHT" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="440" y="40" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-id" value="&lt;u&gt;flight_id&lt;/u&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="380" y="100" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-number" value="flight_number" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="100" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-arrival" value="arrival_time" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="600" y="100" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-departure" value="departure_time" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="390" y="150" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-status" value="flight_status" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="510" y="150" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-destination" value="destination" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="620" y="150" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-id-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.25;exitY=1;" edge="1" parent="1" source="flight-entity" target="flight-id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-number-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.5;exitY=1;" edge="1" parent="1" source="flight-entity" target="flight-number">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-arrival-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.75;exitY=1;" edge="1" parent="1" source="flight-entity" target="flight-arrival">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-departure-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.3;exitY=1;" edge="1" parent="1" source="flight-entity" target="flight-departure">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-status-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.5;exitY=1;" edge="1" parent="1" source="flight-entity" target="flight-status">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flight-dest-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.7;exitY=1;" edge="1" parent="1" source="flight-entity" target="flight-destination">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ENTITY: FUEL_TRANSACTION -->
+        <mxCell id="transaction-entity" value="FUEL_TRANSACTION" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="600" y="340" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-id" value="&lt;u&gt;transaction_id&lt;/u&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="500" y="410" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-ticket" value="ticket_number" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="620" y="410" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-quantity" value="quantity_gallons" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="740" y="410" width="120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-weight" value="quantity_lbs" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="870" y="410" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-density" value="density" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="520" y="460" width="90" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-progress" value="progress" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="620" y="460" width="90" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-change" value="change_flags" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="720" y="460" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-id-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.2;exitY=1;" edge="1" parent="1" source="transaction-entity" target="transaction-id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-ticket-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.4;exitY=1;" edge="1" parent="1" source="transaction-entity" target="transaction-ticket">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-qty-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.6;exitY=1;" edge="1" parent="1" source="transaction-entity" target="transaction-quantity">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-weight-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.8;exitY=1;" edge="1" parent="1" source="transaction-entity" target="transaction-weight">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-density-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.25;exitY=1;" edge="1" parent="1" source="transaction-entity" target="transaction-density">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-progress-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.5;exitY=1;" edge="1" parent="1" source="transaction-entity" target="transaction-progress">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="transaction-change-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.65;exitY=1;" edge="1" parent="1" source="transaction-entity" target="transaction-change">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ENTITY: FUELER -->
+        <mxCell id="fueler-entity" value="FUELER" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="320" y="340" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="fueler-id" value="&lt;u&gt;fueler_id&lt;/u&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="270" y="410" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="fueler-name" value="fueler_name" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="410" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="fueler-handheld" value="handheld_name" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="290" y="460" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="fueler-status" value="status" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="410" y="460" width="90" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="fueler-id-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.35;exitY=1;" edge="1" parent="1" source="fueler-entity" target="fueler-id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fueler-name-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.65;exitY=1;" edge="1" parent="1" source="fueler-entity" target="fueler-name">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fueler-handheld-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.35;exitY=1;" edge="1" parent="1" source="fueler-entity" target="fueler-handheld">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fueler-status-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.65;exitY=1;" edge="1" parent="1" source="fueler-entity" target="fueler-status">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ENTITY: FUEL_TANK -->
+        <mxCell id="tank-entity" value="FUEL_TANK" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="80" y="680" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-id" value="&lt;u&gt;tank_id&lt;/u&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="20" y="740" width="90" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-name" value="tank_name" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="740" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-type" value="fuel_type" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="230" y="740" width="90" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-capacity" value="capacity_gallons" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="30" y="790" width="120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-usable-min" value="usable_min" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="160" y="790" width="90" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-usable-max" value="usable_max" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="260" y="790" width="90" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-id-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.25;exitY=1;" edge="1" parent="1" source="tank-entity" target="tank-id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-name-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.5;exitY=1;" edge="1" parent="1" source="tank-entity" target="tank-name">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-type-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.75;exitY=1;" edge="1" parent="1" source="tank-entity" target="tank-type">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-capacity-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.3;exitY=1;" edge="1" parent="1" source="tank-entity" target="tank-capacity">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-min-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.5;exitY=1;" edge="1" parent="1" source="tank-entity" target="tank-usable-min">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="tank-max-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.7;exitY=1;" edge="1" parent="1" source="tank-entity" target="tank-usable-max">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ENTITY: TANK_READING -->
+        <mxCell id="reading-entity" value="TANK_READING" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="440" y="680" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="reading-id" value="&lt;u&gt;reading_id&lt;/u&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="380" y="740" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="reading-level" value="level_inches" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="740" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="reading-time" value="recorded_at" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="600" y="740" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="reading-id-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.25;exitY=1;" edge="1" parent="1" source="reading-entity" target="reading-id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="reading-level-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.5;exitY=1;" edge="1" parent="1" source="reading-entity" target="reading-level">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="reading-time-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.75;exitY=1;" edge="1" parent="1" source="reading-entity" target="reading-time">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ENTITY: TERMINAL_GATE -->
+        <mxCell id="terminal-entity" value="TERMINAL_GATE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="800" y="40" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal-id" value="&lt;u&gt;terminal_id&lt;/u&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="740" y="100" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal-num" value="terminal_num" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="850" y="100" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal-gate" value="gate_number" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="970" y="100" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal-location" value="location_id" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="790" y="150" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal-display" value="display_order" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="150" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal-id-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.25;exitY=1;" edge="1" parent="1" source="terminal-entity" target="terminal-id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal-num-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.5;exitY=1;" edge="1" parent="1" source="terminal-entity" target="terminal-num">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal-gate-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.75;exitY=1;" edge="1" parent="1" source="terminal-entity" target="terminal-gate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal-location-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.35;exitY=1;" edge="1" parent="1" source="terminal-entity" target="terminal-location">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal-display-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;exitX=0.65;exitY=1;" edge="1" parent="1" source="terminal-entity" target="terminal-display">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- RELATIONSHIP: OPERATES (Flight - Aircraft) -->
+        <mxCell id="operates-rel" value="OPERATES" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="280" y="30" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="operates-aircraft-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;" edge="1" parent="1" source="aircraft-entity" target="operates-rel">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="operates-flight-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;" edge="1" parent="1" source="operates-rel" target="flight-entity">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="operates-card-aircraft" value="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="250" y="40" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="operates-card-flight" value="N" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="410" y="40" width="20" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- RELATIONSHIP: REQUIRES_FUEL (Flight - Fuel Transaction) -->
+        <mxCell id="requires-rel" value="REQUIRES_FUEL" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="630" y="200" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="requires-flight-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=0.75;exitY=1;entryX=0.5;entryY=0;strokeWidth=2;" edge="1" parent="1" source="flight-entity" target="requires-rel">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="requires-transaction-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeWidth=2;" edge="1" parent="1" source="requires-rel" target="transaction-entity">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="requires-card-flight" value="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="590" y="90" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="requires-card-transaction" value="N" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="710" y="310" width="20" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- RELATIONSHIP: ASSIGNED_TO (Fueler - Transaction) with attributes -->
+        <mxCell id="assigned-rel" value="ASSIGNED_TO" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="505" y="330" width="130" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="assigned-fueler-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;" edge="1" parent="1" source="fueler-entity" target="assigned-rel">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="assigned-transaction-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;" edge="1" parent="1" source="assigned-rel" target="transaction-entity">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="assigned-card-fueler" value="M" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="490" y="340" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="assigned-card-transaction" value="N" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="570" y="340" width="20" height="20" as="geometry" />
+        </mxCell>
+        <!-- Relationship Attributes -->
+        <mxCell id="assigned-time" value="assigned_at" style="ellipse;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="520" y="270" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="assigned-time-line" style="edgeStyle=none;html=1;entryX=0.5;entryY=1;exitX=0.5;exitY=0;dashed=1;" edge="1" parent="1" source="assigned-rel" target="assigned-time">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- RELATIONSHIP: HAS_READINGS (Tank - Reading) -->
+        <mxCell id="readings-rel" value="HAS_READINGS" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="280" y="670" width="130" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="readings-tank-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;" edge="1" parent="1" source="tank-entity" target="readings-rel">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="readings-reading-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;" edge="1" parent="1" source="readings-rel" target="reading-entity">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="readings-card-tank" value="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="250" y="680" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="readings-card-reading" value="N" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="410" y="680" width="20" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- RELATIONSHIP: PARKED_AT (Flight - Terminal) -->
+        <mxCell id="parked-rel" value="PARKED_AT" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="640" y="30" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="parked-flight-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;" edge="1" parent="1" source="flight-entity" target="parked-rel">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="parked-terminal-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;" edge="1" parent="1" source="parked-rel" target="terminal-entity">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="parked-card-flight" value="N" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="610" y="40" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="parked-card-terminal" value="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="770" y="40" width="20" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- RELATIONSHIP: CERTIFIED_FOR (Fueler - Aircraft) -->
+        <mxCell id="certified-rel" value="CERTIFIED_FOR" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1020" y="180" width="130" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="certified-fueler-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=1;exitY=0.25;entryX=0.5;entryY=1;strokeWidth=2;" edge="1" parent="1" source="fueler-entity" target="certified-rel">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="certified-aircraft-line" style="edgeStyle=none;html=1;endArrow=none;endFill=0;exitX=0.5;exitY=1;entryX=0;entryY=0.5;strokeWidth=2;" edge="1" parent="1" source="aircraft-entity" target="certified-rel">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="160" y="210" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="certified-card-fueler" value="M" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="970" y="340" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="certified-card-aircraft" value="N" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="140" y="90" width="20" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Title and Legend -->
+        <mxCell id="title" value="Aviation Fuel Dispatch and Operations Management System - E-R Diagram" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="400" y="900" width="700" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-box" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="300" width="400" height="380" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-title" value="LEGEND" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1100" y="310" width="400" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-strong" value="Strong Entity" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1120" y="350" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-relationship" value="Relationship" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1130" y="390" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-primary" value="Primary Key" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="1130" y="450" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-attribute" value="Attribute" style="ellipse;whiteSpace=wrap;html=1;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="1130" y="500" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-rel-attr" value="Rel. Attribute" style="ellipse;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="1130" y="550" width="100" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-notes" value="CARDINALITY NOTATION:&#xa;• 1 = One&#xa;• N = Many&#xa;• M = Many (in M:N relationship)&#xa;&#xa;PARTICIPATION:&#xa;• Total participation shown with double lines&#xa;• Partial participation shown with single lines&#xa;&#xa;ENTITIES (7 strong):&#xa;1. AIRCRAFT&#xa;2. FLIGHT&#xa;3. FUEL_TRANSACTION&#xa;4. FUELER&#xa;5. FUEL_TANK&#xa;6. TANK_READING&#xa;7. TERMINAL_GATE&#xa;&#xa;RELATIONSHIPS (6):&#xa;1. OPERATES (Aircraft-Flight) [1:N]&#xa;2. REQUIRES_FUEL (Flight-Transaction) [1:N]&#xa;3. ASSIGNED_TO (Fueler-Transaction) [M:N]&#xa;4. HAS_READINGS (Tank-Reading) [1:N]&#xa;5. PARKED_AT (Flight-Terminal) [N:1]&#xa;6. CERTIFIED_FOR (Fueler-Aircraft) [M:N]" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="1280" y="350" width="200" height="310" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
