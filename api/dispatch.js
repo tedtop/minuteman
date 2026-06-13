@@ -2,7 +2,7 @@ module.exports = async function handler(req, res) {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, QT-Cookies');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
 
     if (req.method === 'OPTIONS') {
@@ -15,19 +15,11 @@ module.exports = async function handler(req, res) {
 
     try {
         const { CompanyLocationID, UserID } = req.body;
-        const cookies = req.headers['qt-cookies'] || '';
 
         if (!CompanyLocationID || !UserID) {
             return res.status(400).json({
                 success: false,
                 error: 'CompanyLocationID and UserID required'
-            });
-        }
-
-        if (!cookies) {
-            return res.status(401).json({
-                success: false,
-                error: 'QT authentication cookies required'
             });
         }
 
@@ -44,8 +36,7 @@ module.exports = async function handler(req, res) {
                 'Pragma': 'no-cache',
                 'Referer': 'https://go.qttechnologies.com/Portal/Dispatch/ListDispatch?view=tab',
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
-                'X-Requested-With': 'XMLHttpRequest',
-                'Cookie': cookies
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify({
                 CompanyLocationID,
@@ -57,7 +48,7 @@ module.exports = async function handler(req, res) {
             if (response.status === 401 || response.status === 403) {
                 return res.status(401).json({
                     success: false,
-                    error: 'Authentication failed - please login again'
+                    error: 'QT API rejected the request - check QT_COMPANY_LOCATION_ID/QT_USER_ID or contact QT support'
                 });
             }
             throw new Error(`QT API returned status ${response.status}`);

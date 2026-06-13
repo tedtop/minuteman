@@ -15,59 +15,6 @@
         /* Dispatch-specific styles */
 
 
-        .auth-form {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            margin: 20px 0;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-
-        .auth-loading {
-            display: inline-block;
-            color: #2c3e50;
-            font-weight: normal;
-        }
-
-        .auth-loading::after {
-            content: '';
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #2c3e50;
-            border-radius: 50%;
-            border-top-color: transparent;
-            animation: spin 1s linear infinite;
-            margin-left: 10px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #2c3e50;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: border-color 0.3s ease;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
         .dispatch-grid {
             display: grid;
             gap: 15px;
@@ -278,6 +225,68 @@
             transform: translateY(0);
         }
 
+        /* Help icon (fixed position, no layout impact) */
+        .help-icon {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(102, 126, 234, 0.9);
+            color: white;
+            border: none;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .help-icon:hover {
+            background: rgba(102, 126, 234, 1);
+            transform: translateY(-2px);
+        }
+
+        .help-panel {
+            position: fixed;
+            bottom: 70px;
+            right: 20px;
+            max-width: 320px;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            font-size: 14px;
+            color: #2c3e50;
+            line-height: 1.5;
+        }
+
+        .help-panel h4 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .help-panel p {
+            margin-bottom: 12px;
+        }
+
+        .help-panel p:last-child {
+            margin-bottom: 0;
+        }
+
+        @media (max-width: 768px) {
+            .help-panel {
+                max-width: calc(100vw - 40px);
+            }
+        }
+
         /* Mobile styles for dispatch-specific elements */
         @media (max-width: 768px) {
             .dispatch-grid {
@@ -308,13 +317,6 @@
             </div>
         </div>
 
-        <div class="auth-form" id="authForm" style="display: none;">
-            <h3 style="margin-bottom: 20px; color: #2c3e50;">Authenticating to QT Technologies...</h3>
-            <div style="text-align: center; padding: 20px;">
-                <div class="auth-loading">Connecting...</div>
-            </div>
-        </div>
-
         <div id="errorMessage" class="error" style="display: none;"></div>
         <div id="loadingMessage" class="loading" style="display: none;">Loading dispatch data...</div>
 
@@ -331,11 +333,21 @@
         <div class="last-updated" id="lastUpdated"></div>
     </div>
 
+    <button class="help-icon" id="helpIcon" onclick="toggleHelpPanel()">?</button>
+    <div class="help-panel" id="helpPanel" style="display: none;">
+        <h4>Troubleshooting</h4>
+        <p>If dispatch data stops loading: call QT Technologies support, identify as Ted / TTMSO, and ask for a
+            password reset on the TTMSO account. This re-enables the existing Company Location ID / User ID without
+            needing to change them.</p>
+        <p>If the Company Location ID or User ID ever need to change: these are Vercel environment variables
+            (Project Settings &rarr; Environment Variables, or the <code>vercel env</code> CLI) and require a
+            redeploy. This cannot be done from within this app.</p>
+    </div>
+
     <script>
         let isMonitoring = false;
         let monitoringInterval;
-        let qtCookies = null;        // QT authentication cookies
-        let qtCredentials = null;    // QT username/password from config
+        let qtCredentials = null;    // QT company/user IDs from config
         let qtSessionData = null;    // QT company/user IDs for API calls
         let currentDispatches = null; // Store current dispatch data for filtering
         let previousDispatches = null; // Store previous dispatch data for change detection
@@ -343,63 +355,27 @@
 
         // Configuration - dynamically determine the proxy URL
         const LOCAL_PROXY_URL = `${window.location.protocol}//${window.location.host}`;
-        const LOGIN_ENDPOINT = '/api/login';
         const DISPATCH_ENDPOINT = '/api/dispatch';
         const POLL_INTERVAL = 30000; // 30 seconds
 
-        // Authentication function
-        async function authenticate() {
+        // Set up the QT session from config and load initial data
+        async function initializeSession() {
+            qtSessionData = {
+                companyLocationId: qtCredentials.companyLocationId,
+                userId: qtCredentials.userId
+            };
+
             updateStatus('connecting');
-            document.getElementById('authForm').style.display = 'block';
+            await fetchDispatchData();
 
-            try {
-                // First, attempt to login via proxy server
-                const loginResponse = await fetch(`${LOCAL_PROXY_URL}${LOGIN_ENDPOINT}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        username: qtCredentials.username,
-                        password: qtCredentials.password
-                    })
-                });
-
-                const loginData = await loginResponse.json();
-
-                if (loginResponse.ok && loginData.success) {
-                    qtCookies = loginData.qtCookies;
-                    qtSessionData = {
-                        companyLocationId: qtCredentials.companyLocationId,
-                        userId: qtCredentials.userId
-                    };
-
-                    document.getElementById('authForm').style.display = 'none';
-                    showSuccess('Authentication successful!');
-
-                    // Load initial data
-                    await fetchDispatchData();
-
-                    // Start automatic refresh countdown
-                    startRefreshCountdown();
-                    
-                    // Push notifications will be initialized when user clicks test button (Safari requirement)
-                } else {
-                    throw new Error(loginData.message || `Login failed with status: ${loginResponse.status}`);
-                }
-
-            } catch (error) {
-                console.error('Authentication error:', error);
-                updateStatus('disconnected');
-                document.getElementById('authForm').style.display = 'none';
-                showError('Authentication failed: ' + error.message);
-            }
+            // Start automatic refresh countdown
+            startRefreshCountdown();
         }
 
         // Fetch dispatch data from QT Technologies
         async function fetchDispatchData() {
             if (!qtSessionData) {
-                showError('Please authenticate first');
+                showError('Configuration not loaded yet');
                 return;
             }
 
@@ -410,8 +386,7 @@
                 const response = await fetch(`${LOCAL_PROXY_URL}${DISPATCH_ENDPOINT}`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'QT-Cookies': qtCookies || ''
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         CompanyLocationID: qtSessionData.companyLocationId,
@@ -420,13 +395,6 @@
                 });
 
                 if (!response.ok) {
-                    if (response.status === 401) {
-                        // QT session expired, try to re-authenticate
-                        console.log('QT session expired, re-authenticating...');
-                        await authenticate();
-                        return; // authenticate() will call fetchDispatchData() again
-                    }
-
                     // Show complete server error for internal tool troubleshooting
                     const errorText = await response.text();
                     let serverError;
@@ -470,10 +438,6 @@
                 console.error('Fetch error:', error);
                 if (error.message.includes('Failed to fetch')) {
                     showError('Connection Error: Unable to connect to proxy server. Make sure the proxy server is running.');
-                } else if (error.message.includes('403')) {
-                    // If we get a 403, try client-side authentication as fallback
-                    showError('Server authentication failed. Trying client-side authentication...');
-                    await authenticate();
                 } else {
                     showError('Error fetching dispatch data: ' + error.message);
                 }
@@ -661,6 +625,11 @@
         function updateLastUpdated() {
             const lastUpdatedElement = document.getElementById('lastUpdated');
             lastUpdatedElement.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+        }
+
+        function toggleHelpPanel() {
+            const panel = document.getElementById('helpPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         }
 
         // Push notification functions
@@ -952,7 +921,7 @@
             if (isMonitoring) return;
 
             if (!qtSessionData) {
-                showError('Please authenticate first');
+                showError('Session not initialized yet');
                 return;
             }
 
@@ -979,7 +948,7 @@
             if (qtSessionData) {
                 fetchDispatchData();
             } else {
-                showError('Please authenticate first');
+                showError('Session not initialized yet');
             }
         }
 
@@ -1001,8 +970,6 @@
 
                 // Set QT credentials from server config
                 qtCredentials = {
-                    username: config.username,
-                    password: config.password,
                     companyLocationId: config.companyLocationId,
                     userId: config.userId
                 };
@@ -1019,9 +986,8 @@
                 return;
             }
 
-            updateStatus('disconnected');
-            // Now authenticate with proper session data
-            authenticate();
+            // Initialize the session and load dispatch data
+            initializeSession();
 
             // Add event listener for the filter toggle
             document.getElementById('hideDepartedToggle').addEventListener('change', function () {

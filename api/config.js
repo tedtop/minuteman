@@ -16,17 +16,15 @@ module.exports = async function handler(req, res) {
     try {
         // Return configuration from environment variables
         const config = {
-            username: process.env.QT_USERNAME,
-            password: process.env.QT_PASSWORD,
             companyLocationId: process.env.QT_COMPANY_LOCATION_ID,
             userId: process.env.QT_USER_ID,
             vapidPublicKey: process.env.VAPID_PUBLIC_KEY
         };
 
         // Validate required config
-        if (!config.username || !config.password || !config.companyLocationId || !config.userId) {
+        if (!config.companyLocationId || !config.userId) {
             return res.status(500).json({
-                error: 'Server configuration incomplete - missing QT credentials'
+                error: 'Server configuration incomplete - missing QT_COMPANY_LOCATION_ID/QT_USER_ID'
             });
         }
 
