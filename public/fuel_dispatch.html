@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Fuel Dispatch Monitor</title>
+    <title>Fuel Dispatch</title>
     <link rel="stylesheet" href="common.css">
     <script src="weather-widget.js"></script>
     <link rel="manifest" href="/manifest.json">
@@ -118,6 +118,10 @@
             font-size: 16px;
             font-weight: 600;
             color: #2c3e50;
+        }
+
+        .airline-value {
+            min-height: 2.7em;
         }
 
         .fr24-link {
@@ -791,7 +795,7 @@
                     </div>
                     <div class="info-item">
                         <div class="info-label">Airline</div>
-                        <div class="info-value">${dispatch.AirlineName}</div>
+                        <div class="info-value airline-value">${dispatch.AirlineName}</div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Aircraft Type</div>
