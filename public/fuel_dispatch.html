@@ -686,6 +686,9 @@
                     try {
                         const errorData = JSON.parse(errorText);
                         serverError = errorData.error || errorData.message || errorText;
+                        if (errorData.diagnostics) {
+                            console.error('QT dispatch proxy diagnostics:', errorData.diagnostics);
+                        }
                     } catch {
                         serverError = errorText;
                     }
@@ -693,6 +696,10 @@
                 }
 
                 const data = await response.json();
+
+                if (data._proxyDiagnostics?.sessionRefreshed) {
+                    console.warn('QT session expired, refreshed automatically', data._proxyDiagnostics);
+                }
 
                 if (data.Success) {
                     const newDispatches = data.Detail.Dispatches;
