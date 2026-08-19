@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fuel-dispatch-v3';
+const CACHE_NAME = 'fuel-dispatch-v4';
 const urlsToCache = [
   '/fuel_dispatch.html',
   '/common.css',
@@ -25,9 +25,18 @@ self.addEventListener('fetch', event => {
     caches.match(event.request)
       .then(response => {
         // Return cached version or fetch from network
-        return response || fetch(event.request);
-      }
-      )
+        if (response) return response;
+        return fetch(event.request).catch(() => {
+          // Network unreachable (server down, offline, etc.) - respond with
+          // a synthetic error instead of letting the fetch promise reject,
+          // which would otherwise spam the console with unhandled rejections
+          // for every in-flight request (e.g. the 30s dispatch poll).
+          return new Response(JSON.stringify({ success: false, error: 'Network unreachable' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        });
+      })
   );
 });
 
