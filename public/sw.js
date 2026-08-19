@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fuel-dispatch-v4';
+const CACHE_NAME = 'fuel-dispatch-v5';
 const urlsToCache = [
   '/fuel_dispatch.html',
   '/common.css',
@@ -7,6 +7,7 @@ const urlsToCache = [
 
 // Install event - cache resources
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
@@ -60,6 +61,6 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });

@@ -367,6 +367,15 @@
             line-height: 1.5;
         }
 
+        .density-panel-current {
+            display: flex;
+            justify-content: space-around;
+            gap: 15px;
+            padding-bottom: 14px;
+            margin-bottom: 14px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
         .density-panel h4 {
             margin-bottom: 10px;
             color: #2c3e50;
@@ -508,6 +517,16 @@
 
     <button class="density-edit-icon" id="densityEditIcon" onclick="toggleDensityPanel()">🌡️</button>
     <div class="density-panel" id="densityPanel" style="display: none;">
+        <div class="density-panel-current">
+            <div class="density-item">
+                <div class="density-label">🌡️ Outside Temp</div>
+                <div class="density-value" id="densityPanelTemp">--°F</div>
+            </div>
+            <div class="density-item">
+                <div class="density-label">Est. Fuel Density</div>
+                <div class="density-value" id="densityPanelValue">-- lbs/gal</div>
+            </div>
+        </div>
         <h4>Fuel Density Reading</h4>
         <p>Enter today's observed fuel density. Estimates for other temperatures are extrapolated at &plusmn;0.01 lbs/gal per 10&deg;F.</p>
         <div class="density-row">
@@ -553,8 +572,12 @@
         function applyDensity() {
             if (lastOutsideTemp === null) return;
             const bracket = roundTempToBracket(lastOutsideTemp);
-            document.getElementById('densityTemp').textContent = `${Math.round(lastOutsideTemp)}°F`;
-            document.getElementById('densityValue').textContent = `${densityForTemp(bracket).toFixed(2)} lbs/gal`;
+            const tempText = `${Math.round(lastOutsideTemp)}°F`;
+            const densityText = `${densityForTemp(bracket).toFixed(2)} lbs/gal`;
+            document.getElementById('densityTemp').textContent = tempText;
+            document.getElementById('densityValue').textContent = densityText;
+            document.getElementById('densityPanelTemp').textContent = tempText;
+            document.getElementById('densityPanelValue').textContent = densityText;
         }
 
         window.addEventListener('weather:update', function (event) {
