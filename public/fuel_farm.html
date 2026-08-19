@@ -778,8 +778,15 @@
 
         async function updateTankLevel(tankId) {
             const input = document.getElementById(`input-${tankId}`);
-            let level = parseFootInchToInches(input.value.trim());
             const tank = tanks[tankId];
+
+            if (input.value.trim() === '') {
+                input.value = tank.level;
+                validateTankInput(input);
+                return;
+            }
+
+            let level = parseFootInchToInches(input.value.trim());
 
             // Convert to inches first, then validate
             if (isNaN(level)) {
