@@ -25,11 +25,6 @@ QT_USER_ID=your_user_id
 # Supabase
 SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-
-# Push notifications (optional)
-VAPID_PUBLIC_KEY=...
-VAPID_PRIVATE_KEY=...
-VAPID_EMAIL=...
 ```
 
 ## Deploy
@@ -60,8 +55,6 @@ api/                        # Vercel serverless functions
   dispatch.js               # QT Technologies dispatch proxy
   metar.js                  # KMSO METAR proxy
   fuel_density.js           # Fuel density readings
-  subscribe-push.js         # Push notification subscriptions
-  dispatch-push.js          # Sends push on dispatch changes
   fuel_farm/
     tanks.js                # Tank level reads/writes
     tank-history.js         # Historical readings for Jet A trend chart
@@ -86,11 +79,6 @@ schema/                     # Reference docs and DB schema
 | GET/POST | `/api/fuel_density` | Fuel density readings |
 | GET/POST | `/api/fuel_farm/tanks` | Tank levels |
 | GET | `/api/fuel_farm/tank-history` | Historical tank readings |
-| POST | `/api/subscribe-push` | Register push subscription |
-
-## Push Notifications
-
-Push notification code exists (`subscribe-push.js`, `dispatch-push.js`, `shared-store.js`, `test-push.js`) but doesn't work reliably in practice — delivery is inconsistent and the subscription store is in-memory, so it resets on every cold start. The UI button to send a test notification is hidden. The code is kept as a starting point for future experimentation if this is ever worth revisiting.
 
 ## Debugging
 

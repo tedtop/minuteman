@@ -12,6 +12,7 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <meta name="theme-color" content="#667eea">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Fuel Dispatch">
     <style>
@@ -258,28 +259,6 @@
             user-select: none;
         }
 
-        .test-push-btn {
-            background: rgba(102, 126, 234, 0.9);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-left: 10px;
-        }
-
-        .test-push-btn:hover {
-            background: rgba(102, 126, 234, 1);
-            transform: translateY(-1px);
-        }
-
-        .test-push-btn:active {
-            transform: translateY(0);
-        }
-
         /* Help icon (fixed position, no layout impact) */
         .help-icon {
             position: fixed;
@@ -484,7 +463,6 @@
                 <div class="status" id="status">Connecting...</div>
                 <div class="nav-buttons">
                     <a href="/fuel_farm">⛽ Fuel Farm</a>
-                    <!-- <button onclick="testPushNotification()" class="test-push-btn">⛽ Send Latest Dispatch</button> -->
                 </div>
             </div>
         </div>
@@ -549,8 +527,6 @@
         let qtCredentials = null;    // QT company/user IDs from config
         let qtSessionData = null;    // QT company/user IDs for API calls
         let currentDispatches = null; // Store current dispatch data for filtering
-        let previousDispatches = null; // Store previous dispatch data for change detection
-        let vapidPublicKey = null;    // VAPID public key for push notifications
 
         // Configuration - dynamically determine the proxy URL
         const LOCAL_PROXY_URL = `${window.location.protocol}//${window.location.host}`;
@@ -703,22 +679,9 @@
 
                 if (data.Success) {
                     const newDispatches = data.Detail.Dispatches;
-                    
-                    // Detect changes if we have previous data
-                    if (previousDispatches && pushSubscription) {
-                        const changes = detectDispatchChanges(newDispatches, previousDispatches);
-                        
-                        // Send notifications for each change
-                        for (const change of changes) {
-                            console.log('Dispatch change detected:', change.message);
-                            await sendDispatchNotification(change);
-                        }
-                    }
-                    
-                    // Update stored data
-                    previousDispatches = currentDispatches;
+
                     currentDispatches = newDispatches;
-                    
+
                     displayDispatchData(currentDispatches);
                     updateLastUpdated();
                 } else {
@@ -943,290 +906,6 @@
             }
         });
 
-        // Push notification functions
-        let pushSubscription = null;
-
-        // Utility function to convert VAPID public key from base64 to Uint8Array
-        function urlBase64ToUint8Array(base64String) {
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding)
-                .replace(/-/g, '+')
-                .replace(/_/g, '/');
-
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
-            }
-            return outputArray;
-        }
-
-        async function requestNotificationPermission() {
-            if (!('Notification' in window)) {
-                console.log('This browser does not support notifications');
-                return false;
-            }
-
-            if (Notification.permission === 'granted') {
-                return true;
-            }
-
-            if (Notification.permission !== 'denied') {
-                const permission = await Notification.requestPermission();
-                return permission === 'granted';
-            }
-
-            return false;
-        }
-
-        async function subscribeToPushNotifications() {
-            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-                console.log('Push notifications not supported');
-                return false;
-            }
-
-            try {
-                const registration = await navigator.serviceWorker.ready;
-                
-                // Check if already subscribed
-                const existingSubscription = await registration.pushManager.getSubscription();
-                if (existingSubscription) {
-                    pushSubscription = existingSubscription;
-                    console.log('Already subscribed to push notifications');
-                    return true;
-                }
-
-                // Request notification permission
-                const permissionGranted = await requestNotificationPermission();
-                if (!permissionGranted) {
-                    console.log('Notification permission denied');
-                    return false;
-                }
-
-                // Check if VAPID public key is available
-                if (!vapidPublicKey) {
-                    console.log('VAPID public key not available, cannot subscribe to push notifications');
-                    return false;
-                }
-
-                // Subscribe to push notifications
-                const subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-                });
-
-                pushSubscription = subscription;
-                console.log('Subscribed to push notifications');
-
-                // Send subscription to server
-                await sendSubscriptionToServer(subscription);
-                return true;
-
-            } catch (error) {
-                console.error('Error subscribing to push notifications:', error);
-                return false;
-            }
-        }
-
-        async function sendSubscriptionToServer(subscription) {
-            try {
-                const response = await fetch('/api/subscribe-push', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        subscription: subscription,
-                        userId: qtSessionData?.userId,
-                        companyId: qtSessionData?.companyLocationId
-                    })
-                });
-
-                if (!response.ok) {
-                    console.error('Failed to send subscription to server');
-                }
-            } catch (error) {
-                console.error('Error sending subscription to server:', error);
-            }
-        }
-
-        async function testPushNotification() {
-            // If no subscription, try to subscribe first (required for Safari)
-            if (!pushSubscription) {
-                console.log('No push subscription, attempting to subscribe...');
-                const subscribed = await subscribeToPushNotifications();
-                if (!subscribed) {
-                    showError('Failed to subscribe to push notifications. Please check your browser settings.');
-                    return;
-                }
-            }
-
-            // Find the latest dispatch that hasn't departed
-            let latestDispatch = null;
-            if (currentDispatches && currentDispatches.length > 0) {
-                // Filter for flights that haven't departed (not "In Flight")
-                const upcomingDispatches = currentDispatches.filter(d => d.FlightStatus !== 'In Flight');
-                if (upcomingDispatches.length > 0) {
-                    // Sort by departure date to get the next one
-                    upcomingDispatches.sort((a, b) => new Date(a.DepartureDate) - new Date(b.DepartureDate));
-                    latestDispatch = upcomingDispatches[0];
-                }
-            }
-
-            try {
-                const response = await fetch('/api/test-push', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        userId: qtSessionData?.userId,
-                        companyId: qtSessionData?.companyLocationId,
-                        subscription: pushSubscription,
-                        latestDispatch: latestDispatch
-                    })
-                });
-
-                if (response.ok) {
-                    showSuccess('Latest dispatch notification sent!');
-                } else {
-                    showError('Failed to send test notification');
-                }
-            } catch (error) {
-                console.error('Error sending test notification:', error);
-                showError('Error sending test notification');
-            }
-        }
-
-        function detectDispatchChanges(newDispatches, oldDispatches) {
-            if (!oldDispatches || !newDispatches) {
-                return [];
-            }
-
-            const changes = [];
-            
-            // Create maps for easier comparison
-            const oldMap = new Map(oldDispatches.map(d => [d.FlightNumber + d.TailNumber, d]));
-            const newMap = new Map(newDispatches.map(d => [d.FlightNumber + d.TailNumber, d]));
-
-            // Check for new flights
-            for (const [key, flight] of newMap) {
-                if (!oldMap.has(key)) {
-                    changes.push({
-                        type: 'new_flight',
-                        flight: flight,
-                        message: `New flight added: ${flight.FlightNumber} to ${flight.Destination}`
-                    });
-                }
-            }
-
-            // Check for ChangeFlags increments (QT's official change tracking for all changes)
-            for (const [key, newFlight] of newMap) {
-                const oldFlight = oldMap.get(key);
-                if (oldFlight && newFlight.ChangeFlags !== undefined && oldFlight.ChangeFlags !== undefined) {
-                    if (newFlight.ChangeFlags > oldFlight.ChangeFlags) {
-                        // Create contextual message based on current dispatch data
-                        let message = `${newFlight.FlightNumber} to ${newFlight.Destination} (${newFlight.TailNumber}) - Dispatch updated`;
-                        
-                        // Add fuel info if present
-                        if (newFlight.QuantityInWeight && newFlight.QuantityInWeight > 0) {
-                            message = `${newFlight.FlightNumber} to ${newFlight.Destination} (${newFlight.TailNumber}) requested ${newFlight.QuantityInWeight} lbs of fuel`;
-                        }
-                        
-                        changes.push({
-                            type: 'dispatch_update',
-                            flight: newFlight,
-                            oldChangeFlags: oldFlight.ChangeFlags,
-                            newChangeFlags: newFlight.ChangeFlags,
-                            message: message
-                        });
-                    }
-                }
-            }
-
-            return changes;
-        }
-
-        async function sendDispatchNotification(change) {
-            if (!pushSubscription) {
-                console.log('No push subscription available');
-                return;
-            }
-
-            try {
-                // Customize notification based on change type
-                let title, icon;
-                
-                switch (change.type) {
-                    case 'fuel_request':
-                        title = '⛽ New Fuel Request';
-                        icon = '⛽';
-                        break;
-                    case 'fuel_change':
-                        title = '⛽ Fuel Updated';
-                        icon = '⛽';
-                        break;
-                    case 'dispatch_update':
-                        title = '📋 Dispatch Updated';
-                        icon = '📋';
-                        break;
-                    case 'status_change':
-                        title = '✈️ Flight Status Changed';
-                        icon = '✈️';
-                        break;
-                    case 'new_flight':
-                        title = '🆕 New Flight Added';
-                        icon = '✈️';
-                        break;
-                    default:
-                        title = '✈️ Dispatch Update';
-                        icon = '✈️';
-                }
-
-                const payload = {
-                    title: title,
-                    body: change.message,
-                    icon: icon,
-                    tag: `dispatch-${change.flight.FlightNumber}-${change.type}`,
-                    requireInteraction: change.type === 'fuel_request', // Fuel requests are important
-                    data: {
-                        type: change.type,
-                        flightNumber: change.flight.FlightNumber,
-                        tailNumber: change.flight.TailNumber,
-                        timestamp: new Date().toISOString(),
-                        changeFlags: change.newChangeFlags || null,
-                        fuelWeight: change.newWeight || null
-                    },
-                    actions: [
-                        {
-                            action: 'view',
-                            title: 'View Details'
-                        }
-                    ]
-                };
-
-                // Send notification via server
-                const response = await fetch('/api/dispatch-push', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        userId: qtSessionData?.userId,
-                        companyId: qtSessionData?.companyLocationId,
-                        notification: payload
-                    })
-                });
-
-                if (!response.ok) {
-                    console.error('Failed to send dispatch notification');
-                }
-            } catch (error) {
-                console.error('Error sending dispatch notification:', error);
-            }
-        }
-
         // Monitoring functions
         function startMonitoring() {
             if (isMonitoring) return;
@@ -1289,11 +968,7 @@
                     userId: config.userId
                 };
 
-                // Store VAPID public key for push notifications
-                vapidPublicKey = config.vapidPublicKey;
-
                 console.log('QT credentials loaded');
-                console.log('VAPID public key loaded:', vapidPublicKey ? 'Yes' : 'No');
 
             } catch (error) {
                 console.error('Failed to load config:', error);
@@ -1316,8 +991,6 @@
                 try {
                     await navigator.serviceWorker.register('/sw.js');
                     console.log('Service worker registered');
-
-                    // Push notifications will be initialized when user clicks test button (Safari requirement)
                 } catch (error) {
                     console.error('Service worker registration failed:', error);
                 }
