@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fuel-dispatch-685d8cb3';
+const CACHE_NAME = 'fuel-dispatch-b8f98801';
 const urlsToCache = [
   '/fuel_dispatch.html',
   '/common.css',

@@ -57,25 +57,39 @@
             border-left-color: #e67e22;
         }
 
-        .mel-banner {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            background: rgba(230, 126, 34, 0.12);
-            border: 1px solid rgba(230, 126, 34, 0.4);
-            border-radius: 8px;
-            padding: 10px 12px;
-            margin-top: 15px;
+        .dispatch-card.has-change {
+            border-left-color: #e67e22;
         }
 
-        .mel-banner-icon {
-            font-size: 16px;
+        /* Shared compact style for both the MEL notice and the dispatch
+           change notice, so they stack tightly instead of each claiming
+           a full-size banner's worth of space. */
+        .dispatch-alerts {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .dispatch-banner {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            background: rgba(230, 126, 34, 0.12);
+            border: 1px solid rgba(230, 126, 34, 0.4);
+            border-radius: 6px;
+            padding: 6px 8px;
+        }
+
+        .dispatch-banner-icon {
+            font-size: 12px;
             line-height: 1.4;
         }
 
-        .mel-banner-text {
-            font-size: 13px;
+        .dispatch-banner-text {
+            font-size: 11px;
             font-weight: 600;
+            line-height: 1.4;
             color: #9a5215;
             white-space: pre-line;
         }
@@ -575,6 +589,14 @@
         let currentDispatches = null; // Store current dispatch data for filtering
         let lastQtSessionState = null; // Dedup QT session logging - only log on state change, not every poll
 
+        // Dispatch change tracking - flags fuel/gate/time changes between polls
+        // so they're easily noticed on an always-on office display, keyed by
+        // FlightID since QT issues a new TransactionID on every edit.
+        let previousDispatchSnapshots = new Map(); // FlightID -> {QuantityInWeight, Gate, DepartureDate, ArrivalDate}
+        let dispatchChanges = new Map(); // FlightID -> {fuel: [...], gate: [...], time: [...]} - every transition kept, oldest first
+        const CHANGE_RETENTION_MS = 3 * 60 * 60 * 1000; // stop flagging a change after 3 hours
+        const GATE_UNKNOWN_VALUES = new Set([null, undefined, '', '?']);
+
         // Configuration - dynamically determine the proxy URL
         const LOCAL_PROXY_URL = `${window.location.protocol}//${window.location.host}`;
         const DISPATCH_ENDPOINT = '/api/dispatch';
@@ -743,6 +765,7 @@
                 if (data.Success) {
                     const newDispatches = data.Detail.Dispatches;
 
+                    detectDispatchChanges(newDispatches);
                     currentDispatches = newDispatches;
 
                     displayDispatchData(currentDispatches);
@@ -758,6 +781,75 @@
                     showError('Connection Error: Unable to connect to proxy server. Make sure the proxy server is running.');
                 } else {
                     showError('Error fetching dispatch data: ' + error.message);
+                }
+            }
+        }
+
+        // Compare the latest poll against the previous one and record any
+        // fuel/gate/time changes per flight, so cards can flag them even
+        // though the next poll's snapshot will otherwise look "unchanged".
+        function detectDispatchChanges(dispatches) {
+            const now = Date.now();
+            const dispatchesByKey = new Map();
+            dispatches.forEach(d => {
+                const key = d.FlightID || d.TransactionID;
+                if (key) dispatchesByKey.set(key, d);
+            });
+
+            dispatchesByKey.forEach((dispatch, key) => {
+                const prev = previousDispatchSnapshots.get(key);
+                previousDispatchSnapshots.set(key, {
+                    QuantityInWeight: dispatch.QuantityInWeight,
+                    Gate: dispatch.Gate,
+                    DepartureDate: dispatch.DepartureDate,
+                    ArrivalDate: dispatch.ArrivalDate
+                });
+
+                if (!prev) return; // first time seeing this flight - nothing to diff against
+
+                const changes = dispatchChanges.get(key) || { fuel: [], gate: [], time: [] };
+
+                if (prev.QuantityInWeight > 0 && dispatch.QuantityInWeight !== prev.QuantityInWeight) {
+                    changes.fuel.push({
+                        oldValue: prev.QuantityInWeight,
+                        newValue: dispatch.QuantityInWeight,
+                        increased: dispatch.QuantityInWeight > prev.QuantityInWeight,
+                        detectedAt: now
+                    });
+                }
+
+                if (!GATE_UNKNOWN_VALUES.has(prev.Gate) && !GATE_UNKNOWN_VALUES.has(dispatch.Gate) && dispatch.Gate !== prev.Gate) {
+                    changes.gate.push({ oldValue: prev.Gate, newValue: dispatch.Gate, detectedAt: now });
+                }
+
+                if (prev.DepartureDate && dispatch.DepartureDate && dispatch.DepartureDate !== prev.DepartureDate) {
+                    changes.time.push({ label: 'Departure', oldValue: prev.DepartureDate, newValue: dispatch.DepartureDate, detectedAt: now });
+                } else if (prev.ArrivalDate && dispatch.ArrivalDate && dispatch.ArrivalDate !== prev.ArrivalDate) {
+                    changes.time.push({ label: 'Arrival', oldValue: prev.ArrivalDate, newValue: dispatch.ArrivalDate, detectedAt: now });
+                }
+
+                if (changes.fuel.length || changes.gate.length || changes.time.length) {
+                    dispatchChanges.set(key, changes);
+                }
+            });
+
+            // Stop flagging a flight once it's departed or drops out of the
+            // feed entirely; individually age out transitions past retention
+            // so a card doesn't accumulate change lines forever.
+            for (const key of [...dispatchChanges.keys()]) {
+                const dispatch = dispatchesByKey.get(key);
+                if (!dispatch || dispatch.FlightStatus === 'Completed') {
+                    dispatchChanges.delete(key);
+                    continue;
+                }
+
+                const changes = dispatchChanges.get(key);
+                changes.fuel = changes.fuel.filter(c => now - c.detectedAt <= CHANGE_RETENTION_MS);
+                changes.gate = changes.gate.filter(c => now - c.detectedAt <= CHANGE_RETENTION_MS);
+                changes.time = changes.time.filter(c => now - c.detectedAt <= CHANGE_RETENTION_MS);
+
+                if (!changes.fuel.length && !changes.gate.length && !changes.time.length) {
+                    dispatchChanges.delete(key);
                 }
             }
         }
@@ -811,6 +903,13 @@
                 card.classList.add('mel');
             }
 
+            const changeKey = dispatch.FlightID || dispatch.TransactionID;
+            const changes = changeKey ? dispatchChanges.get(changeKey) : null;
+
+            if (changes) {
+                card.classList.add('has-change');
+            }
+
             const statusClass = dispatch.FlightStatus.toLowerCase().replace(' ', '-');
 
             const fr24Url = dispatch.TailNumber
@@ -819,11 +918,41 @@
             const flightTitle = `${dispatch.FlightNumber} to ${dispatch.Destination}`;
             const tailNumberDisplay = dispatch.TailNumber || '';
 
-            const melBannerHtml = dispatch.MEL
-                ? `<div class="mel-banner">
-                        <span class="mel-banner-icon">⚠️</span>
-                        <span class="mel-banner-text">${escapeHtml(dispatch.MELMessage || 'MEL item on this aircraft')}</span>
-                   </div>`
+            const alertBlocks = [];
+            if (dispatch.MEL) {
+                alertBlocks.push(`<div class="dispatch-banner">
+                        <span class="dispatch-banner-icon">⚠️</span>
+                        <span class="dispatch-banner-text">${escapeHtml(dispatch.MELMessage || 'MEL item on this aircraft')}</span>
+                   </div>`);
+            }
+
+            if (changes?.fuel?.length) {
+                const text = changes.fuel.map(c => {
+                    const verb = c.increased ? 'increased' : 'decreased';
+                    return `Fuel ${verb}: ${formatLbs(c.oldValue)} → ${formatLbs(c.newValue)} lbs`;
+                }).join('\n');
+                alertBlocks.push(`<div class="dispatch-banner">
+                        <span class="dispatch-banner-icon">⛽</span>
+                        <span class="dispatch-banner-text">${escapeHtml(text)}</span>
+                   </div>`);
+            }
+            if (changes?.gate?.length) {
+                const text = changes.gate.map(c => `Gate changed: ${c.oldValue} → ${c.newValue}`).join('\n');
+                alertBlocks.push(`<div class="dispatch-banner">
+                        <span class="dispatch-banner-icon">🚪</span>
+                        <span class="dispatch-banner-text">${escapeHtml(text)}</span>
+                   </div>`);
+            }
+            if (changes?.time?.length) {
+                const text = changes.time.map(c => `${c.label} changed: ${formatTimeOnly(c.oldValue)} → ${formatTimeOnly(c.newValue)}`).join('\n');
+                alertBlocks.push(`<div class="dispatch-banner">
+                        <span class="dispatch-banner-icon">🕐</span>
+                        <span class="dispatch-banner-text">${escapeHtml(text)}</span>
+                   </div>`);
+            }
+
+            const alertsHtml = alertBlocks.length
+                ? `<div class="dispatch-alerts">${alertBlocks.join('')}</div>`
                 : '';
 
             card.innerHTML = `
@@ -857,10 +986,20 @@
                     </div>
                 </div>
 
-                ${melBannerHtml}
+                ${alertsHtml}
             `;
 
             return card;
+        }
+
+        function formatLbs(n) {
+            return Math.round(n).toLocaleString();
+        }
+
+        function formatTimeOnly(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
 
         function escapeHtml(str) {
