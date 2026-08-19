@@ -10,9 +10,48 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
 
 const QT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
 
-// QT session cookie, cached across invocations on the same warm instance
-// (Vercel Fluid Compute) so we don't log in on every 30s poll.
+// QT session cookie. There's exactly one QT session at a time - all clients
+// (phones, office desktops) only ever talk to this proxy, never QT directly.
+// Kept in-memory as a fast path for warm invocations, but persisted in
+// Supabase as the source of truth: serverless invocations aren't reliably
+// warm (confirmed this resets on effectively every request in practice),
+// so an in-memory-only cache meant a full 5-request QT re-login on every
+// single 30s poll instead of reusing one session.
 let qtSessionCookie = null;
+
+// Read/write errors here (network blip, Supabase outage, bad credentials)
+// aren't specifically flagged - they degrade to the same "no cached session"
+// path as a genuinely empty cache, which triggers a fresh login. If that
+// degradation is persistent rather than a one-off, it's self-evident from
+// the browser console: the "no cached session" warning fires on every poll
+// instead of once, which is the actual signal worth noticing.
+async function getCachedQtSession() {
+    if (qtSessionCookie) return qtSessionCookie;
+    if (!supabase) return null;
+
+    try {
+        const { data, error } = await supabase
+            .from('qt_session')
+            .select('cookie')
+            .eq('id', 1)
+            .maybeSingle();
+        if (error) throw error;
+        return data?.cookie || null;
+    } catch (error) {
+        console.error('Failed to load cached QT session:', error.message);
+        return null;
+    }
+}
+
+async function saveQtSession(cookie) {
+    qtSessionCookie = cookie;
+    if (!supabase) return;
+
+    const { error } = await supabase
+        .from('qt_session')
+        .upsert({ id: 1, cookie, updated_at: new Date().toISOString() });
+    if (error) console.error('Failed to save QT session:', error.message);
+}
 
 // QT's AJAX auth handler doesn't return a real 401 for GetDispatchDetail -
 // it returns HTTP 200 with {"message":"Unauthorized"} and redirects to the
@@ -187,7 +226,9 @@ module.exports = async function handler(req, res) {
             });
         }
 
-        let response = await callGetDispatchDetail(CompanyLocationID, UserID, qtSessionCookie);
+        const cachedCookie = await getCachedQtSession();
+        const hadCachedSession = !!cachedCookie;
+        let response = await callGetDispatchDetail(CompanyLocationID, UserID, cachedCookie);
         let data = response.ok ? await response.json() : null;
 
         // Retry once with a fresh session if QT rejected us (real 401/403,
@@ -198,18 +239,21 @@ module.exports = async function handler(req, res) {
             console.error('QT auth failure on GetDispatchDetail, refreshing session. status=%d body=%j',
                 initialQtStatus, initialQtBody);
 
+            let freshCookie;
             try {
-                qtSessionCookie = await qtLogin();
+                freshCookie = await qtLogin();
             } catch (loginError) {
                 console.error('QT login refresh failed:', loginError.message);
                 return res.status(401).json({
                     success: false,
                     error: 'QT session expired and re-login failed: ' + loginError.message,
-                    diagnostics: { stage: 'login_failed', initialQtStatus, initialQtBody, loginError: loginError.message }
+                    diagnostics: { stage: 'login_failed', hadCachedSession, initialQtStatus, initialQtBody, loginError: loginError.message }
                 });
             }
 
-            response = await callGetDispatchDetail(CompanyLocationID, UserID, qtSessionCookie);
+            await saveQtSession(freshCookie);
+
+            response = await callGetDispatchDetail(CompanyLocationID, UserID, freshCookie);
             data = response.ok ? await response.json() : null;
 
             if (!response.ok || isQtAuthFailure(data)) {
@@ -220,6 +264,7 @@ module.exports = async function handler(req, res) {
                     error: 'QT API rejected the request even after re-login - check QT_USERNAME/QT_PASSWORD/QT_COMPANY_LOCATION_ID/QT_USER_ID or contact QT support',
                     diagnostics: {
                         stage: 'retry_after_login_failed',
+                        hadCachedSession,
                         initialQtStatus, initialQtBody,
                         retryQtStatus: response.status, retryQtBody: data
                     }
@@ -227,8 +272,16 @@ module.exports = async function handler(req, res) {
             }
 
             // Recovered - flag it so the client can log that the session had
-            // to be refreshed, without treating it as an error.
-            data._proxyDiagnostics = { sessionRefreshed: true, initialQtStatus, initialQtBody };
+            // to be refreshed, without treating it as an error. No need for
+            // the raw QT status/body here (that's only useful once things
+            // are genuinely broken, i.e. the error paths above) - this is
+            // the "it self-healed" path.
+            data._proxyDiagnostics = { sessionRefreshed: true, hadCachedSession };
+        } else {
+            // Cache hit on the first try - still worth a quiet confirmation
+            // so the browser console shows *something* every poll, rather
+            // than leaving "is this actually working?" ambiguous.
+            data._proxyDiagnostics = { sessionRefreshed: false };
         }
 
         recordDispatchHistory(data?.Detail?.Dispatches)

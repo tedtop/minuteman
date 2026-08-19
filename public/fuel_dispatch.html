@@ -527,6 +527,7 @@
         let qtCredentials = null;    // QT company/user IDs from config
         let qtSessionData = null;    // QT company/user IDs for API calls
         let currentDispatches = null; // Store current dispatch data for filtering
+        let lastQtSessionState = null; // Dedup QT session logging - only log on state change, not every poll
 
         // Configuration - dynamically determine the proxy URL
         const LOCAL_PROXY_URL = `${window.location.protocol}//${window.location.host}`;
@@ -673,8 +674,20 @@
 
                 const data = await response.json();
 
-                if (data._proxyDiagnostics?.sessionRefreshed) {
-                    console.warn('QT session expired, refreshed automatically', data._proxyDiagnostics);
+                // Log only when the session state changes, not on every poll -
+                // a multi-day office tab would otherwise pile up thousands of
+                // identical "cache hit" lines. Repeats of the "refreshed"
+                // warning (state keeps flipping back to refreshed) are the
+                // signal that persistence isn't actually working.
+                if (data._proxyDiagnostics) {
+                    const diag = data._proxyDiagnostics;
+                    const state = diag.sessionRefreshed ? (diag.hadCachedSession ? 'refreshed' : 'bootstrap') : 'hit';
+                    if (state !== lastQtSessionState) {
+                        if (state === 'hit') console.log('QT session: cache hit, no re-login needed');
+                        else if (state === 'bootstrap') console.warn('QT session: no cached session yet, logged in fresh');
+                        else console.warn('QT session: previous session was rejected, refreshed automatically');
+                        lastQtSessionState = state;
+                    }
                 }
 
                 if (data.Success) {

@@ -86,3 +86,19 @@ CREATE INDEX IF NOT EXISTS idx_fuel_dispatch_history_recorded
     ON fuel_dispatch_history (recorded_at DESC);
 
 COMMENT ON TABLE fuel_dispatch_history IS 'Time-series of dispatch states from QT API polling. Used for fuel demand trend analytics per flight number per day.';
+
+-- Shared QT Technologies session cookie (singleton row).
+-- All clients (phones, office desktops) talk only to our /api/dispatch proxy,
+-- which is the sole thing that logs into QT - so there is exactly one QT
+-- session at a time, regardless of how many clients are polling us. Persisting
+-- it here (rather than an in-memory variable) means it survives serverless
+-- cold starts instead of forcing a full re-login on every invocation.
+CREATE TABLE IF NOT EXISTS qt_session (
+    id         SMALLINT PRIMARY KEY DEFAULT 1,
+    cookie     TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT qt_session_singleton CHECK (id = 1)
+);
+
+COMMENT ON TABLE qt_session IS 'Singleton row holding the shared QT Technologies session cookie, so the login session survives serverless cold starts instead of resetting every invocation.';
