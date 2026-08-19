@@ -53,6 +53,33 @@
             opacity: 0.7;
         }
 
+        .dispatch-card.mel {
+            border-left-color: #e67e22;
+        }
+
+        .mel-banner {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            background: rgba(230, 126, 34, 0.12);
+            border: 1px solid rgba(230, 126, 34, 0.4);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-top: 15px;
+        }
+
+        .mel-banner-icon {
+            font-size: 16px;
+            line-height: 1.4;
+        }
+
+        .mel-banner-text {
+            font-size: 13px;
+            font-weight: 600;
+            color: #9a5215;
+            white-space: pre-line;
+        }
+
         .flight-header {
             display: flex;
             justify-content: space-between;
@@ -780,6 +807,10 @@
                 card.classList.add('completed');
             }
 
+            if (dispatch.MEL) {
+                card.classList.add('mel');
+            }
+
             const statusClass = dispatch.FlightStatus.toLowerCase().replace(' ', '-');
 
             const fr24Url = dispatch.TailNumber
@@ -787,6 +818,13 @@
                 : null;
             const flightTitle = `${dispatch.FlightNumber} to ${dispatch.Destination}`;
             const tailNumberDisplay = dispatch.TailNumber || '';
+
+            const melBannerHtml = dispatch.MEL
+                ? `<div class="mel-banner">
+                        <span class="mel-banner-icon">⚠️</span>
+                        <span class="mel-banner-text">${escapeHtml(dispatch.MELMessage || 'MEL item on this aircraft')}</span>
+                   </div>`
+                : '';
 
             card.innerHTML = `
                 <div class="flight-header">
@@ -818,9 +856,17 @@
                         ${dispatch.QuantityInWeight} lbs (${dispatch.Quantity} gal)
                     </div>
                 </div>
+
+                ${melBannerHtml}
             `;
 
             return card;
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
         }
 
         // Utility functions

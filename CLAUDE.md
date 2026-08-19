@@ -69,11 +69,19 @@ cached, installed PWAs keep serving that exact version forever, even after a
 new deploy, until `CACHE_NAME` changes (which triggers `cache.addAll` again on
 `install` and deletes the old cache on `activate`).
 
-**Whenever `fuel_dispatch.html`, `common.css`, or `manifest.json` change,
-bump `CACHE_NAME` (e.g. `fuel-dispatch-v2` → `v3`)** so installed PWAs pick up
-the update on next load. Forgetting this is a recurring source of "stale
-shell" bugs (e.g. old API endpoints, missing UI elements) on phones that have
-the app added to the home screen.
+**Bump `CACHE_NAME` once, right before a production deploy that includes
+changes to `fuel_dispatch.html`, `common.css`, or `manifest.json`** — not on
+every local commit. Only what's live when you actually deploy matters to
+installed PWAs, so bumping per-commit during local iteration just churns the
+value pointlessly; a single bump covering everything since the last deploy is
+enough.
+
+Instead of a sequential version number, suffix `fuel-dispatch-` with a short
+random hex string (e.g. `fuel-dispatch-685d8cb3`, 8 hex chars from a UUID) —
+there's nothing to track or keep in sync, just generate a fresh one each time
+a bump is needed. Forgetting the bump entirely is the real risk — it's a
+recurring source of "stale shell" bugs (e.g. old API endpoints, missing UI
+elements) on phones that have the app added to the home screen.
 
 ## Fuel Farm Enhancements (TODO)
 - **Enhanced Tank Level Visual Indicators**: Make tank level displays prettier with color-coded zones:

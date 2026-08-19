@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fuel-dispatch-v5';
+const CACHE_NAME = 'fuel-dispatch-685d8cb3';
 const urlsToCache = [
   '/fuel_dispatch.html',
   '/common.css',
@@ -11,11 +11,11 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Opened cache');
+        console.log(`SW install: precaching app shell into "${CACHE_NAME}"`, urlsToCache);
         return cache.addAll(urlsToCache);
       })
       .catch(error => {
-        console.log('Cache add failed:', error);
+        console.log(`SW install: failed to precache "${CACHE_NAME}":`, error);
       })
   );
 });
@@ -56,7 +56,7 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
+            console.log(`SW activate: purging stale cache "${cacheName}" (current is "${CACHE_NAME}")`);
             return caches.delete(cacheName);
           }
         })
