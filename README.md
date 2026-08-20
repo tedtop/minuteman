@@ -60,13 +60,16 @@ api/                        # Vercel serverless functions
     tank-history.js         # Historical readings for Jet A trend chart
 public/                     # Frontend
   fuel_dispatch.html
+  fuel_dispatch.css
   fuel_farm.html
+  fuel_farm.css
   common.css
   weather-widget.js
   gallons-tables.js         # Inches → gallons lookup tables
-schema/                     # Reference docs and DB schema
-  supabase-schema.sql
-  SUPABASE_SETUP.md
+schema/
+  supabase-schema.sql       # Run against a fresh Supabase project to recreate the DB
+  dispatches_with_change.json   # Sample QT GetDispatchDetail response, for reference
+  dispatch_change_injections.js # Console snippets for exercising MEL/change banners locally
 ```
 
 ## API Endpoints

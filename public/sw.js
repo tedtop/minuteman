@@ -1,6 +1,7 @@
 const CACHE_NAME = 'fuel-dispatch-b8f98801';
 const urlsToCache = [
   '/fuel_dispatch.html',
+  '/fuel_dispatch.css',
   '/common.css',
   '/manifest.json'
 ];

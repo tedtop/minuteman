@@ -1,0 +1,486 @@
+/* Dispatch-specific styles */
+
+
+.dispatch-grid {
+    display: grid;
+    gap: 15px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.dispatch-grid:not(:empty) {
+    margin-bottom: 20px;
+}
+
+.dispatch-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border-left: 5px solid #667eea;
+    transition: all 0.3s ease;
+}
+
+.dispatch-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.dispatch-card.priority {
+    border-left-color: #e74c3c;
+}
+
+.dispatch-card.completed {
+    border-left-color: #27ae60;
+    opacity: 0.7;
+}
+
+.dispatch-card.mel {
+    border-left-color: #e67e22;
+}
+
+.dispatch-card.has-change {
+    border-left-color: #e67e22;
+}
+
+/* Shared compact style for both the MEL notice and the dispatch
+   change notice, so they stack tightly instead of each claiming
+   a full-size banner's worth of space. */
+.dispatch-alerts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.dispatch-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    background: rgba(230, 126, 34, 0.12);
+    border: 1px solid rgba(230, 126, 34, 0.4);
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+
+.dispatch-banner-icon {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.dispatch-banner-text {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #9a5215;
+    white-space: pre-line;
+}
+
+.flight-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.flight-number {
+    font-size: 20px;
+    font-weight: 700;
+    color: #2c3e50;
+}
+
+.flight-status {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.flight-status.in-flight {
+    background: #bee3f8;
+    color: #2c5282;
+}
+
+.flight-status.out {
+    background: #ffeaa7;
+    color: #856404;
+}
+
+.flight-status.in {
+    background: #a8e6cf;
+    color: #155724;
+}
+
+.flight-status.planned {
+    background: #ddd6fe;
+    color: #553c9a;
+}
+
+.flight-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.info-item {
+    background: rgba(102, 126, 234, 0.1);
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.info-label {
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+}
+
+.info-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.airline-value {
+    min-height: 2.7em;
+}
+
+.fr24-link {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.fr24-link:hover {
+    text-decoration: underline;
+}
+
+.fuel-info {
+    background: rgba(39, 174, 96, 0.1);
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 15px;
+}
+
+.fuel-quantity {
+    font-size: 18px;
+    font-weight: 700;
+    color: #27ae60;
+    text-align: center;
+}
+
+
+.last-updated {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    margin-top: 20px;
+}
+
+/* Fuel density box */
+.density-box {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 25px;
+    flex-wrap: wrap;
+}
+
+.density-item {
+    text-align: center;
+}
+
+.density-label {
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.density-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #2c3e50;
+}
+
+/* Filter toggle styles */
+.filter-controls {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    margin-top: 0px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+}
+
+/* Toggle switch styles */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.4s;
+    border-radius: 34px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+}
+
+input:checked+.toggle-slider {
+    background-color: #667eea;
+}
+
+input:checked+.toggle-slider:before {
+    transform: translateX(26px);
+}
+
+.filter-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Help icon (fixed position, no layout impact) */
+.help-icon {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(102, 126, 234, 0.9);
+    color: white;
+    border: none;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.help-icon:hover {
+    background: rgba(102, 126, 234, 1);
+    transform: translateY(-2px);
+}
+
+.help-panel {
+    position: fixed;
+    bottom: 70px;
+    right: 20px;
+    max-width: 320px;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    font-size: 14px;
+    color: #2c3e50;
+    line-height: 1.5;
+}
+
+.help-panel h4 {
+    margin-bottom: 10px;
+    color: #2c3e50;
+}
+
+.help-panel p {
+    margin-bottom: 12px;
+}
+
+.help-panel p:last-child {
+    margin-bottom: 0;
+}
+
+.help-panel a {
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .help-panel {
+        max-width: calc(100vw - 40px);
+    }
+}
+
+/* Density edit icon (fixed position, no layout impact) */
+.density-edit-icon {
+    position: fixed;
+    bottom: 20px;
+    right: 70px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(102, 126, 234, 0.9);
+    color: white;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.density-edit-icon:hover {
+    background: rgba(102, 126, 234, 1);
+    transform: translateY(-2px);
+}
+
+.density-panel {
+    position: fixed;
+    bottom: 70px;
+    right: 20px;
+    max-width: 320px;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    font-size: 14px;
+    color: #2c3e50;
+    line-height: 1.5;
+}
+
+.density-panel-current {
+    display: flex;
+    justify-content: space-around;
+    gap: 15px;
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.density-panel h4 {
+    margin-bottom: 10px;
+    color: #2c3e50;
+}
+
+.density-panel p {
+    margin-bottom: 12px;
+}
+
+.density-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+    margin-bottom: 12px;
+}
+
+.density-row input {
+    width: 70px;
+    text-align: right;
+    padding: 4px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.density-save-btn {
+    width: 100%;
+    background: rgba(102, 126, 234, 0.9);
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.density-save-btn:hover {
+    background: rgba(102, 126, 234, 1);
+}
+
+.density-save-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.density-save-btn .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    vertical-align: middle;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: density-spin 0.6s linear infinite;
+}
+
+@keyframes density-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+    .density-panel {
+        max-width: calc(100vw - 40px);
+    }
+}
+
+/* Mobile styles for dispatch-specific elements */
+@media (max-width: 768px) {
+    .dispatch-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .flight-info {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+
+    .filter-controls {
+        flex-direction: column;
+        gap: 10px;
+        padding: 15px;
+    }
+}
