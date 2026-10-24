@@ -84,7 +84,6 @@
 
         let refreshInterval;
 
-        let consecutiveFarmFailures = 0; // Banner stays up once this is a sustained outage, not a blip
         let errorHideTimeout = null;
 
         // Load tank data on page load
@@ -577,13 +576,23 @@
                 if (match.index > lastIndex) {
                     element.appendChild(document.createTextNode(message.slice(lastIndex, match.index)));
                 }
+                // Strip trailing punctuation that's sentence structure, not
+                // part of the URL (e.g. the comma in "...com, then update").
+                let url = match[0];
+                let trailing = '';
+                const trailingMatch = url.match(/[.,;:!?)\]}'"]+$/);
+                if (trailingMatch) {
+                    trailing = trailingMatch[0];
+                    url = url.slice(0, -trailing.length);
+                }
                 const link = document.createElement('a');
-                link.href = match[0];
-                link.textContent = match[0];
+                link.href = url;
+                link.textContent = url;
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
                 link.style.color = 'inherit';
                 element.appendChild(link);
+                if (trailing) element.appendChild(document.createTextNode(trailing));
                 lastIndex = urlPattern.lastIndex;
             }
             if (lastIndex < message.length) {
@@ -597,16 +606,14 @@
             document.getElementById('errorMessage').style.display = 'none';
         }
 
-        // Polling/connection failures stay up (sticky) once they repeat,
-        // same treatment as the dispatch page - a one-off blip auto-hides,
-        // a sustained outage shouldn't quietly disappear after 5s.
+        // Polling/connection failures keep the banner up (sticky) for as
+        // long as they persist, so it never disappears while the status
+        // pill is still showing red - only a successful fetch clears both.
         function recordFarmFailure(message) {
-            consecutiveFarmFailures++;
-            showError(message, consecutiveFarmFailures >= 2);
+            showError(message, true);
         }
 
         function clearFarmFailure() {
-            consecutiveFarmFailures = 0;
             hideError();
         }
 

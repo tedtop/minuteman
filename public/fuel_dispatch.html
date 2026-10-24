@@ -102,7 +102,6 @@
         let currentDispatches = null; // Store current dispatch data for filtering
         let lastQtSessionState = null; // Dedup QT session logging - only log on state change, not every poll
         let dispatchHasError = false; // Drives the status countdown's color/text while fetchDispatchData is failing
-        let consecutiveDispatchFailures = 0; // Banner stays up (not just a 5s flash) once this is a sustained outage, not a blip
         let errorHideTimeout = null;
 
         // Dispatch change tracking - flags fuel/gate/time changes between polls
@@ -299,7 +298,6 @@
                     updateLastUpdated();
 
                     dispatchHasError = false;
-                    consecutiveDispatchFailures = 0;
                     hideError();
                 } else {
                     const errorMsg = data.ErrorMessage || 'Failed to fetch dispatch data';
@@ -317,13 +315,12 @@
         }
 
         // Shared failure path for fetchDispatchData: flips the status countdown
-        // red and keeps the error banner up (instead of auto-hiding after 5s)
-        // once a problem has lasted more than one poll, so a real outage stays
-        // visible on an unattended office display rather than flashing by.
+        // red and keeps the error banner up (sticky) for as long as the
+        // failure persists, so the banner never disappears while the status
+        // pill is still showing red - only a successful fetch clears both.
         function recordDispatchFailure(message) {
             dispatchHasError = true;
-            consecutiveDispatchFailures++;
-            showError(message, consecutiveDispatchFailures >= 2);
+            showError(message, true);
         }
 
         // Compare the latest poll against the previous one and record any
@@ -653,13 +650,23 @@
                 if (match.index > lastIndex) {
                     element.appendChild(document.createTextNode(message.slice(lastIndex, match.index)));
                 }
+                // Strip trailing punctuation that's sentence structure, not
+                // part of the URL (e.g. the comma in "...com, then update").
+                let url = match[0];
+                let trailing = '';
+                const trailingMatch = url.match(/[.,;:!?)\]}'"]+$/);
+                if (trailingMatch) {
+                    trailing = trailingMatch[0];
+                    url = url.slice(0, -trailing.length);
+                }
                 const link = document.createElement('a');
-                link.href = match[0];
-                link.textContent = match[0];
+                link.href = url;
+                link.textContent = url;
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
                 link.style.color = 'inherit';
                 element.appendChild(link);
+                if (trailing) element.appendChild(document.createTextNode(trailing));
                 lastIndex = urlPattern.lastIndex;
             }
             if (lastIndex < message.length) {
