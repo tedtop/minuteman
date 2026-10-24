@@ -62,6 +62,8 @@
             </div>
         </div>
 
+        <div id="errorMessage" class="error" style="display: none;"></div>
+
         <div class="tanks-container" id="tanksContainer">
             <!-- Tanks will be populated by JavaScript -->
         </div>
@@ -81,6 +83,9 @@
         let countdownInterval;
 
         let refreshInterval;
+
+        let consecutiveFarmFailures = 0; // Banner stays up once this is a sustained outage, not a blip
+        let errorHideTimeout = null;
 
         // Load tank data on page load
         document.addEventListener('DOMContentLoaded', function () {
@@ -123,6 +128,7 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    clearFarmFailure();
                     tanks = data.tanks;
                     // Don't blow away an in-progress edit on a focused input
                     if (!isUserEnteringData()) {
@@ -145,7 +151,7 @@
                         updateStatus('disconnected');
                     }
                 } else {
-                    showError('Failed to load tank data');
+                    recordFarmFailure('Failed to load tank data');
                     // Stop the background refresh interval on failure
                     if (refreshInterval) {
                         clearInterval(refreshInterval);
@@ -155,7 +161,7 @@
                 }
             } catch (error) {
                 console.error('Error loading tank data:', error);
-                showError('Connection error: ' + error.message);
+                recordFarmFailure('Connection error: ' + error.message);
                 // Stop the background refresh interval on connection error
                 if (refreshInterval) {
                     clearInterval(refreshInterval);
@@ -542,7 +548,7 @@
         }
 
 
-        function showError(message) {
+        function showError(message, sticky = false) {
             const status = document.getElementById('status');
             status.textContent = '🔴 ' + message;
             status.className = 'status disconnected';
@@ -551,6 +557,31 @@
             if (countdownInterval) {
                 clearInterval(countdownInterval);
             }
+
+            const errorElement = document.getElementById('errorMessage');
+            errorElement.textContent = message;
+            errorElement.style.display = 'flex';
+            if (errorHideTimeout) clearTimeout(errorHideTimeout);
+            errorHideTimeout = sticky ? null : setTimeout(hideError, 5000);
+        }
+
+        function hideError() {
+            if (errorHideTimeout) clearTimeout(errorHideTimeout);
+            errorHideTimeout = null;
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        // Polling/connection failures stay up (sticky) once they repeat,
+        // same treatment as the dispatch page - a one-off blip auto-hides,
+        // a sustained outage shouldn't quietly disappear after 5s.
+        function recordFarmFailure(message) {
+            consecutiveFarmFailures++;
+            showError(message, consecutiveFarmFailures >= 2);
+        }
+
+        function clearFarmFailure() {
+            consecutiveFarmFailures = 0;
+            hideError();
         }
 
         function formatDateTime(isoString) {
