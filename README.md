@@ -8,7 +8,7 @@ Serverless web app for monitoring fuel dispatch operations and fuel farm tank le
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in credentials
+vercel env pull .env.local   # pulls credentials from Vercel (source of truth)
 npm run dev                  # http://localhost:3000
 ```
 
@@ -45,7 +45,17 @@ vercel --prod
 ```
 Or push to `master` — Vercel auto-deploys on every commit.
 
-Environment variables are managed in the Vercel dashboard (Project Settings → Environment Variables). After adding or changing a variable, redeploy for it to take effect.
+Environment variables are managed in the Vercel dashboard (Project Settings →
+Environment Variables) — **that's the single source of truth**, not
+`.env.local`. If a credential changes (e.g. QT forces a password reset),
+update it in Vercel (both Development and Production) via the dashboard or
+`vercel env add <NAME> <environment>`, then run `vercel env pull .env.local`
+to resync your local copy. After adding or changing a variable, redeploy
+(`vercel --prod` or push to `master`) for Production to pick it up —
+`vercel dev` picks up Development env vars on restart without a deploy.
+Editing `.env.local` directly works for local-only experiments but will be
+silently overwritten/out of sync with what `vercel dev` actually uses next
+time someone runs `vercel env pull`.
 
 ## Project Structure
 

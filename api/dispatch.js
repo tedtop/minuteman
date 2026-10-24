@@ -60,6 +60,28 @@ function isQtAuthFailure(data) {
     return !data || typeof data.Success === 'undefined';
 }
 
+// QT also sometimes responds 200 with an empty/non-JSON body (observed with
+// a stale cached session) instead of either real data or the disguised
+// Unauthorized JSON above. response.json() throws on that ("Unexpected end
+// of JSON input"), which - if left uncaught - skips the re-login/retry logic
+// entirely and just 500s. Read the body as text first so a bad body degrades
+// to isQtAuthFailure's null-data case (triggering the retry) instead of
+// crashing, and so the raw text is available for diagnostics either way.
+async function readQtJsonResponse(response) {
+    let rawText = '';
+    try {
+        rawText = await response.text();
+    } catch (error) {
+        return { data: null, rawText: `<failed to read response body: ${error.message}>` };
+    }
+    if (!rawText) return { data: null, rawText: '' };
+    try {
+        return { data: JSON.parse(rawText), rawText };
+    } catch {
+        return { data: null, rawText };
+    }
+}
+
 // Merges Set-Cookie headers from a response into an existing "k=v; k=v"
 // cookie string, replacing any cookie names that already appear.
 // Uses getSetCookie() (returns each header separately) rather than the
@@ -229,13 +251,14 @@ module.exports = async function handler(req, res) {
         const cachedCookie = await getCachedQtSession();
         const hadCachedSession = !!cachedCookie;
         let response = await callGetDispatchDetail(CompanyLocationID, UserID, cachedCookie);
-        let data = response.ok ? await response.json() : null;
+        let { data, rawText } = await readQtJsonResponse(response);
 
         // Retry once with a fresh session if QT rejected us (real 401/403,
-        // or the disguised 200-with-Unauthorized-body case).
+        // the disguised 200-with-Unauthorized-body case, or a 200 with an
+        // empty/non-JSON body - all of these come back as isQtAuthFailure).
         if (!response.ok || isQtAuthFailure(data)) {
             const initialQtStatus = response.status;
-            const initialQtBody = data;
+            const initialQtBody = data ?? rawText.slice(0, 500);
             console.error('QT auth failure on GetDispatchDetail, refreshing session. status=%d body=%j',
                 initialQtStatus, initialQtBody);
 
@@ -254,11 +277,12 @@ module.exports = async function handler(req, res) {
             await saveQtSession(freshCookie);
 
             response = await callGetDispatchDetail(CompanyLocationID, UserID, freshCookie);
-            data = response.ok ? await response.json() : null;
+            ({ data, rawText } = await readQtJsonResponse(response));
 
             if (!response.ok || isQtAuthFailure(data)) {
+                const retryQtBody = data ?? rawText.slice(0, 500);
                 console.error('QT auth failure persisted after re-login. status=%d body=%j',
-                    response.status, data);
+                    response.status, retryQtBody);
                 return res.status(401).json({
                     success: false,
                     error: 'QT API rejected the request even after re-login - check QT_USERNAME/QT_PASSWORD/QT_COMPANY_LOCATION_ID/QT_USER_ID or contact QT support',
@@ -266,7 +290,7 @@ module.exports = async function handler(req, res) {
                         stage: 'retry_after_login_failed',
                         hadCachedSession,
                         initialQtStatus, initialQtBody,
-                        retryQtStatus: response.status, retryQtBody: data
+                        retryQtStatus: response.status, retryQtBody
                     }
                 });
             }

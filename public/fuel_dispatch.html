@@ -101,6 +101,9 @@
         let qtSessionData = null;    // QT company/user IDs for API calls
         let currentDispatches = null; // Store current dispatch data for filtering
         let lastQtSessionState = null; // Dedup QT session logging - only log on state change, not every poll
+        let dispatchHasError = false; // Drives the status countdown's color/text while fetchDispatchData is failing
+        let consecutiveDispatchFailures = 0; // Banner stays up (not just a 5s flash) once this is a sustained outage, not a blip
+        let errorHideTimeout = null;
 
         // Dispatch change tracking - flags fuel/gate/time changes between polls
         // so they're easily noticed on an always-on office display, keyed by
@@ -242,19 +245,30 @@
                 });
 
                 if (!response.ok) {
-                    // Show complete server error for internal tool troubleshooting
+                    // Keep the full server error in the console for troubleshooting,
+                    // but surface a plain-English summary in the on-screen banner -
+                    // "Server Error 500: Dispatch proxy error: Unexpected end of
+                    // JSON input" means nothing to someone glancing at the office
+                    // display, and QT auth failures (the common case) have a known,
+                    // actionable cause worth naming directly.
                     const errorText = await response.text();
                     let serverError;
+                    let stage = null;
                     try {
                         const errorData = JSON.parse(errorText);
                         serverError = errorData.error || errorData.message || errorText;
+                        stage = errorData.diagnostics?.stage || null;
                         if (errorData.diagnostics) {
                             console.error('QT dispatch proxy diagnostics:', errorData.diagnostics);
                         }
                     } catch {
                         serverError = errorText;
                     }
-                    throw new Error(`Server Error ${response.status}: ${serverError}`);
+
+                    if (stage === 'login_failed' || stage === 'retry_after_login_failed') {
+                        throw new Error(`QT login is being rejected - QT may have forced a password reset. Check/reset at https://go.qttechnologies.com/, then update QT_PASSWORD in Vercel (Development + Production env vars, redeploy to apply). (${serverError})`);
+                    }
+                    throw new Error(`Dispatch server error ${response.status}: ${serverError}`);
                 }
 
                 const data = await response.json();
@@ -283,19 +297,33 @@
 
                     displayDispatchData(currentDispatches);
                     updateLastUpdated();
+
+                    dispatchHasError = false;
+                    consecutiveDispatchFailures = 0;
+                    hideError();
                 } else {
                     const errorMsg = data.ErrorMessage || 'Failed to fetch dispatch data';
-                    showError(errorMsg);
+                    recordDispatchFailure('QT error: ' + errorMsg);
                 }
 
             } catch (error) {
                 console.error('Fetch error:', error);
                 if (error.message.includes('Failed to fetch')) {
-                    showError('Connection Error: Unable to connect to proxy server. Make sure the proxy server is running.');
+                    recordDispatchFailure('Connection error: unable to reach the proxy server. Make sure the server is running.');
                 } else {
-                    showError('Error fetching dispatch data: ' + error.message);
+                    recordDispatchFailure(error.message);
                 }
             }
+        }
+
+        // Shared failure path for fetchDispatchData: flips the status countdown
+        // red and keeps the error banner up (instead of auto-hiding after 5s)
+        // once a problem has lasted more than one poll, so a real outage stays
+        // visible on an unattended office display rather than flashing by.
+        function recordDispatchFailure(message) {
+            dispatchHasError = true;
+            consecutiveDispatchFailures++;
+            showError(message, consecutiveDispatchFailures >= 2);
         }
 
         // Compare the latest poll against the previous one and record any
@@ -570,7 +598,11 @@
 
             countdownInterval = setInterval(() => {
                 refreshCountdown--;
-                updateStatus('connected', `🟢 Next refresh in ${refreshCountdown}s`);
+                if (dispatchHasError) {
+                    updateStatus('disconnected', `🔴 Dispatch error - retrying in ${refreshCountdown}s`);
+                } else {
+                    updateStatus('connected', `🟢 Next refresh in ${refreshCountdown}s`);
+                }
 
                 if (refreshCountdown <= 0) {
                     refreshCountdown = 30;
@@ -601,13 +633,18 @@
             refreshNow();
         }
 
-        function showError(message) {
+        function showError(message, sticky = false) {
             const errorElement = document.getElementById('errorMessage');
             errorElement.textContent = message;
             errorElement.style.display = 'block';
-            setTimeout(() => {
-                errorElement.style.display = 'none';
-            }, 5000);
+            if (errorHideTimeout) clearTimeout(errorHideTimeout);
+            errorHideTimeout = sticky ? null : setTimeout(hideError, 5000);
+        }
+
+        function hideError() {
+            if (errorHideTimeout) clearTimeout(errorHideTimeout);
+            errorHideTimeout = null;
+            document.getElementById('errorMessage').style.display = 'none';
         }
 
         function showSuccess(message) {
