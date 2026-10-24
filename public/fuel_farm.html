@@ -560,7 +560,7 @@
 
             const errorElement = document.getElementById('errorMessage');
             errorElement.textContent = message;
-            errorElement.style.display = 'flex';
+            errorElement.style.display = 'block';
             if (errorHideTimeout) clearTimeout(errorHideTimeout);
             errorHideTimeout = sticky ? null : setTimeout(hideError, 5000);
         }

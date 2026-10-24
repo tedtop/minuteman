@@ -133,27 +133,14 @@ body {
 
 /* Error messages */
 .error {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    background: #fff;
-    color: #7a271a;
-    padding: 16px 20px;
-    border-radius: 12px;
+    background: rgba(231, 76, 60, 0.1);
+    color: #c0392b;
+    padding: 15px;
+    border-radius: 10px;
     margin-bottom: 20px;
-    text-align: left;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border-left: 5px solid #e74c3c;
-    font-size: 14px;
+    text-align: center;
     font-weight: 600;
     line-height: 1.5;
-}
-
-.error::before {
-    content: '⚠️';
-    flex-shrink: 0;
-    font-size: 18px;
-    line-height: 1.4;
 }
 
 /* Weather card (desktop only, injected by weather-widget.js) */
