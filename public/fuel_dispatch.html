@@ -266,7 +266,7 @@
                     }
 
                     if (stage === 'login_failed' || stage === 'retry_after_login_failed') {
-                        throw new Error('QT login is being rejected - QT may have forced a password reset. Check/reset at go.qttechnologies.com, then update QT_PASSWORD in Vercel.');
+                        throw new Error('QT login is being rejected - QT may have forced a password reset. Check/reset at https://go.qttechnologies.com, then update QT_PASSWORD in Vercel.');
                     }
                     throw new Error(`Dispatch server error ${response.status}: ${serverError}`);
                 }
@@ -635,10 +635,36 @@
 
         function showError(message, sticky = false) {
             const errorElement = document.getElementById('errorMessage');
-            errorElement.textContent = message;
+            renderErrorMessage(errorElement, message);
             errorElement.style.display = 'block';
             if (errorHideTimeout) clearTimeout(errorHideTimeout);
             errorHideTimeout = sticky ? null : setTimeout(hideError, 5000);
+        }
+
+        // Renders an error message as text, auto-linkifying any http(s) URL
+        // it contains - built with DOM methods (not innerHTML) so server/QT
+        // error text can never be interpreted as markup.
+        function renderErrorMessage(element, message) {
+            element.textContent = '';
+            const urlPattern = /(https?:\/\/[^\s]+)/g;
+            let lastIndex = 0;
+            let match;
+            while ((match = urlPattern.exec(message)) !== null) {
+                if (match.index > lastIndex) {
+                    element.appendChild(document.createTextNode(message.slice(lastIndex, match.index)));
+                }
+                const link = document.createElement('a');
+                link.href = match[0];
+                link.textContent = match[0];
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.style.color = 'inherit';
+                element.appendChild(link);
+                lastIndex = urlPattern.lastIndex;
+            }
+            if (lastIndex < message.length) {
+                element.appendChild(document.createTextNode(message.slice(lastIndex)));
+            }
         }
 
         function hideError() {
