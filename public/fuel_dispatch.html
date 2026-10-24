@@ -757,16 +757,6 @@
                 }
             });
 
-            // Register service worker for PWA functionality
-            if ('serviceWorker' in navigator) {
-                try {
-                    await navigator.serviceWorker.register('/sw.js');
-                    console.log('Service worker registered');
-                } catch (error) {
-                    console.error('Service worker registration failed:', error);
-                }
-            }
-
             // Refresh immediately when the app/tab regains focus
             document.addEventListener('visibilitychange', function () {
                 if (document.visibilityState === 'visible' && qtSessionData) {

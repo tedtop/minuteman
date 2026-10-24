@@ -40,29 +40,24 @@ files, each page having its own `<page>.css` alongside the shared
   window event; `fuel_dispatch.html` listens for it to drive the fuel
   density estimate.
 
-## PWA Service Worker Caching
+## No Service Worker (removed October 2026)
 
-`public/sw.js` precaches the app shell (`fuel_dispatch.html`,
-`fuel_dispatch.css`, `common.css`, `manifest.json`) under `CACHE_NAME` and
-serves them **cache-first** — `caches.match(event.request) || fetch(...)`.
-This means once a file is cached, installed PWAs keep serving that exact
-version forever, even after a new deploy, until `CACHE_NAME` changes (which
-triggers `cache.addAll` again on `install` and deletes the old cache on
-`activate`). Note `fuel_farm.html`/`fuel_farm.css` are *not* precached —
-only the dispatch page has offline support today (see Known Issues below).
+The app used to have a `public/sw.js` precaching the dispatch page's shell
+cache-first for offline/PWA support. It was removed: both pages are useless
+without a live connection (dispatch needs QT, fuel farm needs Supabase), so
+there was never a real offline mode to support — only a recurring "stale
+shell" bug where installed/previously-visited clients kept serving old
+CSS/HTML until someone remembered to bump `CACHE_NAME` on deploy. That
+bump-discipline requirement is gone along with the service worker.
 
-**Bump `CACHE_NAME` once, right before a production deploy that includes
-changes to any precached file** — not on every local commit. Only what's
-live when you actually deploy matters to installed PWAs, so bumping
-per-commit during local iteration just churns the value pointlessly; a
-single bump covering everything since the last deploy is enough.
-
-Instead of a sequential version number, suffix `fuel-dispatch-` with a short
-random hex string (e.g. `fuel-dispatch-685d8cb3`, 8 hex chars from a UUID) —
-there's nothing to track or keep in sync, just generate a fresh one each time
-a bump is needed. Forgetting the bump entirely is the real risk — it's a
-recurring source of "stale shell" bugs (e.g. old API endpoints, missing UI
-elements) on phones that have the app added to the home screen.
+`public/sw.js` still exists, but only as a one-time cleanup script: it
+clears any caches it finds, unregisters itself, and reloads open tabs, so
+that anyone with the old service worker already installed gets flushed back
+to normal network requests. `fuel_dispatch.html` no longer registers it.
+Once existing installs have had time to cycle through this (the old SW has
+to actually run its `activate` handler once), `sw.js` and its `<link
+rel="manifest">`/service-worker-adjacent bits can be deleted outright if the
+PWA "add to home screen" affordance isn't worth keeping either.
 
 ## Fuel Farm Enhancements (TODO)
 - **Enhanced Tank Level Visual Indicators**: color-code the tank fill zones —
@@ -87,9 +82,6 @@ Found during an August 2026 cleanup pass, not yet acted on:
 - **`api/login.js` is dead code** — unused since `GetDispatchDetail` was
   found to work without a session cookie, kept on disk deliberately per its
   own header comment in case that ever changes.
-- **`fuel_farm.html` has no offline/PWA support** — `sw.js` only precaches
-  the dispatch page's shell. Decide if that's intentional (office display vs.
-  mobile use) or an oversight worth fixing.
 - **CORS header mismatch in `api/dispatch.js`**: sends
   `Access-Control-Allow-Origin: *` together with
   `Access-Control-Allow-Credentials: true` — browsers reject that
