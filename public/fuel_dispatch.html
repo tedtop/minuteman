@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="common.css">
     <link rel="stylesheet" href="fuel_dispatch.css">
     <script src="weather-widget.js"></script>
+    <script src="error-banner.js"></script>
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" href="/icons/icon-192.png">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -102,7 +103,6 @@
         let currentDispatches = null; // Store current dispatch data for filtering
         let lastQtSessionState = null; // Dedup QT session logging - only log on state change, not every poll
         let dispatchHasError = false; // Drives the status countdown's color/text while fetchDispatchData is failing
-        let errorHideTimeout = null;
 
         // Dispatch change tracking - flags fuel/gate/time changes between polls
         // so they're easily noticed on an always-on office display, keyed by
@@ -183,7 +183,7 @@
                 });
                 const data = await response.json();
                 if (!data.success) {
-                    showError(data.error || 'Failed to save fuel density reading');
+                    renderErrorBanner(data.error || 'Failed to save fuel density reading');
                     return;
                 }
                 fuelDensityReading = { temperatureF, densityLbsGal: Math.round(densityLbsGal * 100) / 100 };
@@ -191,7 +191,7 @@
                 toggleDensityPanel();
             } catch (error) {
                 console.error('Failed to save fuel density reading:', error);
-                showError('Failed to save fuel density reading');
+                renderErrorBanner('Failed to save fuel density reading');
             } finally {
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = 'Save';
@@ -226,7 +226,7 @@
         // Fetch dispatch data from QT Technologies
         async function fetchDispatchData() {
             if (!qtSessionData) {
-                showError('Configuration not loaded yet');
+                renderErrorBanner('Configuration not loaded yet');
                 return;
             }
 
@@ -265,7 +265,12 @@
                     }
 
                     if (stage === 'login_failed' || stage === 'retry_after_login_failed') {
-                        throw new Error('QT login is being rejected – QT may have forced a password reset. Check/reset at https://go.qttechnologies.com, then update QT_PASSWORD in Vercel.');
+                        recordDispatchFailure([
+                            'QT login is being rejected – QT may have forced a password reset. Check/reset at ',
+                            'https://go.qttechnologies.com',
+                            ', then update QT_PASSWORD in Vercel.'
+                        ]);
+                        return;
                     }
                     throw new Error(`Dispatch server error ${response.status}: ${serverError}`);
                 }
@@ -298,7 +303,7 @@
                     updateLastUpdated();
 
                     dispatchHasError = false;
-                    hideError();
+                    hideErrorBanner();
                 } else {
                     const errorMsg = data.ErrorMessage || 'Failed to fetch dispatch data';
                     recordDispatchFailure('QT error: ' + errorMsg);
@@ -320,7 +325,7 @@
         // pill is still showing red - only a successful fetch clears both.
         function recordDispatchFailure(message) {
             dispatchHasError = true;
-            showError(message, true);
+            renderErrorBanner(message, true);
         }
 
         // Compare the latest poll against the previous one and record any
@@ -630,56 +635,6 @@
             refreshNow();
         }
 
-        function showError(message, sticky = false) {
-            const errorElement = document.getElementById('errorMessage');
-            renderErrorMessage(errorElement, message);
-            errorElement.style.display = 'block';
-            if (errorHideTimeout) clearTimeout(errorHideTimeout);
-            errorHideTimeout = sticky ? null : setTimeout(hideError, 5000);
-        }
-
-        // Renders an error message as text, auto-linkifying any http(s) URL
-        // it contains - built with DOM methods (not innerHTML) so server/QT
-        // error text can never be interpreted as markup.
-        function renderErrorMessage(element, message) {
-            element.textContent = '';
-            const urlPattern = /(https?:\/\/[^\s]+)/g;
-            let lastIndex = 0;
-            let match;
-            while ((match = urlPattern.exec(message)) !== null) {
-                if (match.index > lastIndex) {
-                    element.appendChild(document.createTextNode(message.slice(lastIndex, match.index)));
-                }
-                // Strip trailing punctuation that's sentence structure, not
-                // part of the URL (e.g. the comma in "...com, then update").
-                let url = match[0];
-                let trailing = '';
-                const trailingMatch = url.match(/[.,;:!?)\]}'"]+$/);
-                if (trailingMatch) {
-                    trailing = trailingMatch[0];
-                    url = url.slice(0, -trailing.length);
-                }
-                const link = document.createElement('a');
-                link.href = url;
-                link.textContent = url;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                link.style.color = 'inherit';
-                element.appendChild(link);
-                if (trailing) element.appendChild(document.createTextNode(trailing));
-                lastIndex = urlPattern.lastIndex;
-            }
-            if (lastIndex < message.length) {
-                element.appendChild(document.createTextNode(message.slice(lastIndex)));
-            }
-        }
-
-        function hideError() {
-            if (errorHideTimeout) clearTimeout(errorHideTimeout);
-            errorHideTimeout = null;
-            document.getElementById('errorMessage').style.display = 'none';
-        }
-
         function showSuccess(message) {
             // You can implement a success message display here
             console.log('Success:', message);
@@ -715,7 +670,7 @@
             if (isMonitoring) return;
 
             if (!qtSessionData) {
-                showError('Session not initialized yet');
+                renderErrorBanner('Session not initialized yet');
                 return;
             }
 
@@ -742,7 +697,7 @@
             if (qtSessionData) {
                 fetchDispatchData();
             } else {
-                showError('Session not initialized yet');
+                renderErrorBanner('Session not initialized yet');
             }
         }
 
@@ -761,7 +716,7 @@
 
                 // If server returned an error, show it directly
                 if (config.error) {
-                    showError(config.error);
+                    renderErrorBanner(config.error);
                     updateStatus('disconnected');
                     return;
                 }
@@ -776,7 +731,7 @@
 
             } catch (error) {
                 console.error('Failed to load config:', error);
-                showError('Failed to load configuration from server');
+                renderErrorBanner('Failed to load configuration from server');
                 return;
             }
 

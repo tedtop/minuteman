@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="fuel_farm.css">
     <script src="gallons-tables.js"></script>
     <script src="weather-widget.js"></script>
+    <script src="error-banner.js"></script>
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" href="/icons/icon-192.png">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -83,8 +84,6 @@
         let countdownInterval;
 
         let refreshInterval;
-
-        let errorHideTimeout = null;
 
         // Load tank data on page load
         document.addEventListener('DOMContentLoaded', function () {
@@ -556,54 +555,7 @@
             if (countdownInterval) {
                 clearInterval(countdownInterval);
             }
-
-            const errorElement = document.getElementById('errorMessage');
-            renderErrorMessage(errorElement, message);
-            errorElement.style.display = 'block';
-            if (errorHideTimeout) clearTimeout(errorHideTimeout);
-            errorHideTimeout = sticky ? null : setTimeout(hideError, 5000);
-        }
-
-        // Renders an error message as text, auto-linkifying any http(s) URL
-        // it contains - built with DOM methods (not innerHTML) so server/DB
-        // error text can never be interpreted as markup.
-        function renderErrorMessage(element, message) {
-            element.textContent = '';
-            const urlPattern = /(https?:\/\/[^\s]+)/g;
-            let lastIndex = 0;
-            let match;
-            while ((match = urlPattern.exec(message)) !== null) {
-                if (match.index > lastIndex) {
-                    element.appendChild(document.createTextNode(message.slice(lastIndex, match.index)));
-                }
-                // Strip trailing punctuation that's sentence structure, not
-                // part of the URL (e.g. the comma in "...com, then update").
-                let url = match[0];
-                let trailing = '';
-                const trailingMatch = url.match(/[.,;:!?)\]}'"]+$/);
-                if (trailingMatch) {
-                    trailing = trailingMatch[0];
-                    url = url.slice(0, -trailing.length);
-                }
-                const link = document.createElement('a');
-                link.href = url;
-                link.textContent = url;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                link.style.color = 'inherit';
-                element.appendChild(link);
-                if (trailing) element.appendChild(document.createTextNode(trailing));
-                lastIndex = urlPattern.lastIndex;
-            }
-            if (lastIndex < message.length) {
-                element.appendChild(document.createTextNode(message.slice(lastIndex)));
-            }
-        }
-
-        function hideError() {
-            if (errorHideTimeout) clearTimeout(errorHideTimeout);
-            errorHideTimeout = null;
-            document.getElementById('errorMessage').style.display = 'none';
+            renderErrorBanner(message, sticky);
         }
 
         // Polling/connection failures keep the banner up (sticky) for as
@@ -614,7 +566,7 @@
         }
 
         function clearFarmFailure() {
-            hideError();
+            hideErrorBanner();
         }
 
         function formatDateTime(isoString) {
