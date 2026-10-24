@@ -59,6 +59,25 @@ to actually run its `activate` handler once), `sw.js` and its `<link
 rel="manifest">`/service-worker-adjacent bits can be deleted outright if the
 PWA "add to home screen" affordance isn't worth keeping either.
 
+## QT Password Rotation (considered, deferred)
+
+QT periodically forces a password reset on the TTMSO account (happened
+2026-10-24, caused a production outage). Today, recovering from this is
+fully manual: reset the password at https://go.qttechnologies.com/ (or call
+QT support per the troubleshooting doc if the account is locked), then
+update `QT_PASSWORD` in Vercel (Development + Production env vars) and
+redeploy for Production to pick it up.
+
+We discussed building self-service recovery directly into the app: a shared
+password gate on the dispatch/farm pages (reusing `QT_PASSWORD` itself,
+since it's already posted physically near the line office computer — no
+new exposure), plus an "Update QT Password" form that verifies the current
+password and pushes the new one to Vercel via its API (needs a
+`VERCEL_API_TOKEN` secret) and triggers a redeploy automatically. Deferred
+for now — manually updating the Vercel env var and redeploying works fine
+and is simple; revisit this if password rotations become frequent enough
+that the manual process is a real burden.
+
 ## Fuel Farm Enhancements (TODO)
 - **Enhanced Tank Level Visual Indicators**: color-code the tank fill zones —
   red for unusable fuel areas (below usable minimum), yellow for
