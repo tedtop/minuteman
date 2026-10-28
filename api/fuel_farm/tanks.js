@@ -56,6 +56,16 @@ async function getLatestReadings() {
     return data || [];
 }
 
+async function getMinReadings() {
+    if (!supabase) throw new Error('Database not configured');
+
+    const { data, error } = await supabase
+        .rpc('get_min_tank_readings');
+
+    if (error) throw error;
+    return data || [];
+}
+
 async function recordTankLevel(tankId, level) {
     if (!supabase) throw new Error('Database not configured');
 
@@ -99,20 +109,30 @@ module.exports = async function handler(req, res) {
                     fuelType: config.fuelType,
                     capacity: config.capacity,
                     name: config.name,
-                    lastUpdated: null
+                    lastUpdated: null,
+                    recordedLow: null // lowest level ever recorded; null until a reading exists
                 };
             }
 
             // Get latest readings from database
             let dbConnected = true;
             try {
-                const latestReadings = await getLatestReadings();
+                const [latestReadings, minReadings] = await Promise.all([
+                    getLatestReadings(),
+                    getMinReadings()
+                ]);
 
                 // Merge readings with config
                 latestReadings.forEach(reading => {
                     if (tanks[reading.tank_id]) {
                         tanks[reading.tank_id].level = reading.level;
                         tanks[reading.tank_id].lastUpdated = reading.recorded_at;
+                    }
+                });
+
+                minReadings.forEach(reading => {
+                    if (tanks[reading.tank_id]) {
+                        tanks[reading.tank_id].recordedLow = reading.level;
                     }
                 });
             } catch (error) {

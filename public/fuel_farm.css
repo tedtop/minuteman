@@ -162,6 +162,51 @@
     background: #495057;
 }
 
+/* Unusable-fuel zone: shaded from the tank bottom up to the lowest level
+   ever recorded. Drawn after .fuel-level in the DOM so the tint sits on
+   top of it and stays visible even when the current level is well above
+   this line. Hoverable (title attribute) for the gallons/lowest-recorded
+   readout, so pointer-events stays enabled here.
+
+   Split by fuel type because translucent color-over-color only reads well
+   when the overlay and the fill are in the same warm/cool family - red
+   over orange (avgas) is analogous and stays vivid, but red (or anything
+   saturated) over teal is roughly complementary and desaturates to a
+   muddy brown/gray instead. Translucent white over teal doesn't have that
+   problem - it just lightens the teal in place. */
+.unusable-zone {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    cursor: help;
+}
+
+.unusable-zone.avgas {
+    background: repeating-linear-gradient(135deg,
+        rgba(192, 57, 43, 0.45), rgba(192, 57, 43, 0.45) 6px,
+        rgba(120, 30, 20, 0.5) 6px, rgba(120, 30, 20, 0.5) 12px);
+}
+
+.unusable-zone.jet-a {
+    background: repeating-linear-gradient(135deg,
+        rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.35) 6px,
+        rgba(255, 255, 255, 0.55) 6px, rgba(255, 255, 255, 0.55) 12px);
+}
+
+/* Gray stripes over the fuel's own color showing through underneath -
+   not a red tint. Translucent red over teal was desaturating to a muddy
+   brown/gray instead of reading as either red or blue, so this drops the
+   red entirely: alternating opaque gray / transparent lets each tank's
+   actual fill color (yellow-orange or teal) show in every other stripe,
+   same as it already does unintentionally on avgas. One rule for both
+   fuel types since the color comes from whatever's underneath. */
+.unusable-zone {
+    background: repeating-linear-gradient(135deg,
+        rgba(108, 117, 125, 0.85), rgba(108, 117, 125, 0.85) 6px,
+        transparent 6px, transparent 12px);
+}
+
 .level-info {
     margin-top: 20px;
 }

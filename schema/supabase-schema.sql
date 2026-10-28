@@ -36,6 +36,22 @@ AS $$
     ORDER BY tank_id, recorded_at DESC;
 $$;
 
+-- Function to get the lowest level ever recorded for each tank, used as a
+-- data-driven stand-in for "unusable fuel" - how low that tank has actually
+-- been able to go, rather than the configured usableMin in tanks.js.
+CREATE OR REPLACE FUNCTION get_min_tank_readings()
+RETURNS TABLE (
+    tank_id VARCHAR(10),
+    level DECIMAL(5,2)
+)
+LANGUAGE SQL
+STABLE
+AS $$
+    SELECT tank_id, MIN(level) AS level
+    FROM tank_level_readings
+    GROUP BY tank_id;
+$$;
+
 COMMENT ON TABLE tank_level_readings IS 'Time-series tank level readings. Tank configuration stored in application code.';
 
 -- Create fuel_density_readings table (hydrometer readings: fuel temp + density)

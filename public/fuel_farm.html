@@ -482,6 +482,15 @@
             // strapping-table gallons on a calculator by hand.
             const ullageGallons = Math.round(inchesToGallons(tankId, tank.usableMax) - inchesToGallons(tankId, tank.level));
 
+            // Unusable-fuel zone: shaded from the tank bottom up to the lowest
+            // level ever actually recorded for this tank (not the configured
+            // usableMin), so it reflects real-world draw-down rather than a
+            // theoretical strapping-table figure.
+            const hasRecordedLow = tank.recordedLow != null;
+            const unusableZoneHeight = hasRecordedLow ? Math.min(100, (tank.recordedLow / tank.usableMax) * 100) : 0;
+            const unusableGallons = hasRecordedLow ? Math.round(inchesToGallons(tankId, tank.recordedLow)) : 0;
+            const unusableZoneTitle = `${unusableGallons.toLocaleString()} gal unusable below ${tank.recordedLow}&quot; (lowest ever recorded)`;
+
             card.innerHTML = `
                 <div class="tank-header">
                     <div class="tank-name">${tankId}</div>
@@ -490,6 +499,7 @@
 
                 <div class="tank-visual">
                     <div class="fuel-level ${fuelTypeClass}${isOverMax ? ' over-max' : ''}" style="height: ${levelHeight}%"></div>
+                    ${hasRecordedLow ? `<div class="unusable-zone ${fuelTypeClass}" style="height: ${unusableZoneHeight}%" title="${unusableZoneTitle}"></div>` : ''}
                     <div class="level-markers">
                         ${generateMarkers(tank.usableMax)}
                     </div>
