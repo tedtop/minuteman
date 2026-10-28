@@ -92,6 +92,7 @@ schema/
 | GET/POST | `/api/fuel_density` | Fuel density readings |
 | GET/POST | `/api/fuel_farm/tanks` | Tank levels |
 | GET | `/api/fuel_farm/tank-history` | Historical tank readings |
+| GET/POST | `/api/fuel_farm/gravity` | Fuel load gravity QC readings + mixed T2-T7 running average |
 
 ## Debugging
 

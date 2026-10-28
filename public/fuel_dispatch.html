@@ -43,6 +43,7 @@
             <div class="density-item">
                 <div class="density-label">Est. Fuel Density</div>
                 <div class="density-value" id="densityValue">-- lbs/gal</div>
+                <div class="density-source" id="densitySource"></div>
             </div>
         </div>
 
@@ -80,10 +81,11 @@
             <div class="density-item">
                 <div class="density-label">Est. Fuel Density</div>
                 <div class="density-value" id="densityPanelValue">-- lbs/gal</div>
+                <div class="density-source" id="densityPanelSource"></div>
             </div>
         </div>
         <h4>Fuel Density Reading</h4>
-        <p>Enter today's observed fuel density. Estimates for other temperatures are extrapolated at &plusmn;0.01 lbs/gal per 10&deg;F.</p>
+        <p>Used only as a fallback when the fuel farm hasn't logged any gravity QC loads yet (see the 🧪 button on the Fuel Farm page) &mdash; otherwise the estimate above comes from that farm-wide average. Estimates for other temperatures here are extrapolated at &plusmn;0.01 lbs/gal per 10&deg;F.</p>
         <div class="density-row">
             <label for="densityReadingTemp">Fuel Temp (&deg;F)</label>
             <input type="number" id="densityReadingTemp" step="1">
@@ -117,17 +119,22 @@
         const DISPATCH_ENDPOINT = '/api/dispatch';
         const POLL_INTERVAL = 30000; // 30 seconds
 
-        // Fuel density estimation (driven by the shared weather widget's "weather:update" event)
-        const FUEL_DENSITY_SLOPE_PER_DEGREE = -0.001; // lbs/gal per °F (±0.01 per 10°F)
+        // Fuel density estimation (driven by the shared weather widget's "weather:update" event).
+        // Prefers the fuel farm's gravity-QC rolling average (api/fuel_farm/gravity.js -
+        // gallon-weighted ASTM correction across recent loads, see the 🧪 button on the
+        // Fuel Farm page) over the single manually-entered hydrometer reading below, which
+        // is now only a fallback for when no gravity QC loads have been logged yet.
+        const FUEL_DENSITY_SLOPE_PER_DEGREE = -0.001; // lbs/gal per °F (±0.01 per 10°F) - manual fallback only
         const FUEL_DENSITY_DEFAULT_READING = { temperatureF: 50, densityLbsGal: 6.79 };
         let fuelDensityReading = { ...FUEL_DENSITY_DEFAULT_READING };
+        let farmGravityAverage = null; // from /api/fuel_farm/gravity - takes priority when present
         let lastOutsideTemp = null;
 
         function roundTempToBracket(temp) {
             return Math.round(temp / 10) * 10;
         }
 
-        function densityForTemp(temp) {
+        function densityForTempManual(temp) {
             const diff = temp - fuelDensityReading.temperatureF;
             const density = fuelDensityReading.densityLbsGal + diff * FUEL_DENSITY_SLOPE_PER_DEGREE;
             return Math.round(density * 100) / 100;
@@ -136,20 +143,48 @@
         function applyDensity() {
             if (lastOutsideTemp === null) return;
             const bracket = roundTempToBracket(lastOutsideTemp);
+
+            let densityLbsGal, sourceText;
+            if (farmGravityAverage && farmGravityAverage.atTemp) {
+                densityLbsGal = farmGravityAverage.atTemp.densityLbsGal;
+                sourceText = `farm avg · ${farmGravityAverage.sampleCount} load${farmGravityAverage.sampleCount === 1 ? '' : 's'} in window`;
+            } else {
+                densityLbsGal = densityForTempManual(bracket);
+                sourceText = 'manual reading (no farm QC loads logged yet)';
+            }
+
             const tempText = `${Math.round(lastOutsideTemp)}°F`;
-            const densityText = `${densityForTemp(bracket).toFixed(2)} lbs/gal`;
+            const densityText = `${densityLbsGal.toFixed(2)} lbs/gal`;
             document.getElementById('densityTemp').textContent = tempText;
             document.getElementById('densityValue').textContent = densityText;
+            document.getElementById('densitySource').textContent = sourceText;
             document.getElementById('densityPanelTemp').textContent = tempText;
             document.getElementById('densityPanelValue').textContent = densityText;
+            document.getElementById('densityPanelSource').textContent = sourceText;
         }
 
+        // Re-fetches the farm's gravity average at the new temperature bracket on
+        // every weather poll (~10 min) - cheap, and keeps the at-temp density
+        // estimate current without the dispatch page needing its own polling loop.
         window.addEventListener('weather:update', function (event) {
             lastOutsideTemp = event.detail.temperature_2m;
-            applyDensity();
+            loadFarmGravityEstimate(roundTempToBracket(lastOutsideTemp));
         });
 
-        // Load the latest hydrometer reading (shared across all users via the database)
+        async function loadFarmGravityEstimate(tempBracket) {
+            try {
+                const response = await fetch(`${LOCAL_PROXY_URL}/api/fuel_farm/gravity?atTempF=${tempBracket}`);
+                const data = await response.json();
+                farmGravityAverage = (data.success && data.average) ? data.average : null;
+            } catch (error) {
+                console.error('Failed to load fuel farm gravity estimate:', error);
+                farmGravityAverage = null;
+            }
+            applyDensity();
+        }
+
+        // Load the manually-entered hydrometer reading (shared across all users via the
+        // database) - the fallback source when the farm has no gravity QC loads on file.
         async function loadFuelDensityReading() {
             try {
                 const response = await fetch(`${LOCAL_PROXY_URL}/api/fuel_density`);

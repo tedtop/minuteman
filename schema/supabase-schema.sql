@@ -52,6 +52,37 @@ CREATE INDEX IF NOT EXISTS idx_fuel_density_readings_recorded
 
 COMMENT ON TABLE fuel_density_readings IS 'Hydrometer readings of fuel temperature and density, used to extrapolate density estimates at other temperatures.';
 
+-- Fuel load gravity QC readings (fuel farm Jet A receipts, tanks T2-T7).
+-- Taken when a load arrives: hydrometer temp + reading, the GTP-3012-1A
+-- wheel's correction of that reading to 60F (the figure of record, checked
+-- against the driver's BOL API gravity for the +/-1.0 acceptance rule), and
+-- gallons delivered so a gallon-weighted running average can stand in for
+-- the "mixed" specific gravity of whatever loads have gone into T2-T7.
+CREATE TABLE IF NOT EXISTS fuel_gravity_readings (
+    id BIGSERIAL PRIMARY KEY,
+    observed_temp_f DECIMAL(5,2) NOT NULL,
+    observed_api_gravity DECIMAL(5,2) NOT NULL,
+    computed_api_gravity_60 DECIMAL(5,2) NOT NULL,
+    wheel_api_gravity_60 DECIMAL(5,2) NOT NULL,
+    driver_api_gravity DECIMAL(5,2) NOT NULL,
+    driver_specific_gravity DECIMAL(6,4),
+    gallons_delivered DECIMAL(8,2) NOT NULL CHECK (gallons_delivered > 0),
+    acceptable BOOLEAN NOT NULL,
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fuel_gravity_readings_recorded
+    ON fuel_gravity_readings(recorded_at DESC);
+
+COMMENT ON TABLE fuel_gravity_readings IS 'Fuel load gravity QC readings for the T2-T7 Jet A farm: hydrometer temp/reading, the GTP-3012-1A wheel''s 60F correction (the figure checked against the driver''s BOL for the +/-1.0 API acceptance rule), and gallons delivered for a gallon-weighted running "mixed" gravity.';
+
+-- The gallon-weighted "mixed" gravity average itself (windowed to the most
+-- recent loads covering ~one T2-T7 farm volume) is computed in
+-- api/fuel_farm/gravity.js rather than in SQL, so the windowing logic stays
+-- easy to read, tune, and log server-side instead of living in a second,
+-- harder-to-debug implementation here.
+
 -- Dispatch history for trend analytics
 -- One row per distinct (TransactionID, ChangeFlags) state seen during polling.
 -- The UNIQUE constraint deduplicates concurrent client polls via ON CONFLICT DO NOTHING.

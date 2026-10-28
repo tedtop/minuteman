@@ -71,6 +71,44 @@
         </div>
     </div>
 
+    <button class="gravity-edit-icon" id="gravityEditIcon" onclick="toggleGravityPanel()" title="Fuel load gravity QC">🧪</button>
+    <div class="gravity-panel" id="gravityPanel" style="display: none;">
+        <div class="gravity-panel-current" id="gravityPanelCurrent">
+            <div class="gravity-empty">No loads logged yet</div>
+        </div>
+        <h4>Fuel Load Gravity QC</h4>
+        <p>Jet A loads into T2&ndash;T7. Hydrometer reading + temp, then the GTP&#8209;3012&#8209;1A wheel's 60&deg;F correction &mdash; that wheel reading is checked against the driver's BOL and must be within &plusmn;1.0 API to be acceptable.</p>
+
+        <div class="gravity-row">
+            <label for="gravityObservedTemp">Observed Fuel Temp (&deg;F)</label>
+            <input type="number" id="gravityObservedTemp" step="1">
+        </div>
+        <div class="gravity-row">
+            <label for="gravityObservedApi">Hydrometer Reading (&deg;API)</label>
+            <input type="number" id="gravityObservedApi" step="0.1">
+        </div>
+        <div class="gravity-row">
+            <label for="gravityWheelApi60">Wheel Reading @ 60&deg;F (&deg;API)</label>
+            <input type="number" id="gravityWheelApi60" step="0.1">
+        </div>
+        <div class="gravity-row">
+            <label for="gravityDriverApi">Driver's BOL API Gravity</label>
+            <input type="number" id="gravityDriverApi" step="0.1">
+        </div>
+        <div class="gravity-row">
+            <label for="gravityDriverSg">Driver's BOL Specific Gravity</label>
+            <input type="number" id="gravityDriverSg" step="0.0001" placeholder="optional">
+        </div>
+        <div class="gravity-row">
+            <label for="gravityGallons">Gallons Delivered</label>
+            <input type="number" id="gravityGallons" step="1" placeholder="~12000">
+        </div>
+
+        <button class="gravity-save-btn" id="gravitySaveBtn" onclick="saveGravityReading()">Save</button>
+
+        <div class="gravity-result" id="gravityResult" style="display: none;"></div>
+    </div>
+
     <script>
         const API_BASE_URL = `${window.location.protocol}//${window.location.host}/api/fuel_farm`;
         const JET_A_TANKS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -98,6 +136,8 @@
             setInterval(() => loadJetATrendHistory(trendRange), TREND_HISTORY_POLL_INTERVAL);
             setupTrendZoom();
             setupTrendHover();
+
+            loadGravitySummary();
 
             // Start refresh cycle - will be managed based on connection status
             refreshInterval = setInterval(() => {
@@ -751,6 +791,158 @@
                 event.preventDefault();
                 updateTankLevel(tankId);
             }
+        }
+
+        // --- Fuel load gravity QC (T2-T7 mixed running average) ---
+
+        const GRAVITY_API_URL = `${API_BASE_URL}/gravity`;
+        let gravityAverage = null;
+        let lastOutsideTempForGravity = null;
+
+        window.addEventListener('weather:update', function (event) {
+            lastOutsideTempForGravity = event.detail.temperature_2m;
+            loadGravitySummary();
+        });
+
+        async function loadGravitySummary() {
+            try {
+                const atTempParam = lastOutsideTempForGravity !== null ? `?atTempF=${Math.round(lastOutsideTempForGravity)}` : '';
+                const response = await fetch(`${GRAVITY_API_URL}${atTempParam}`);
+                const data = await response.json();
+                if (data.success) {
+                    gravityAverage = data.average;
+                    logGravityDebug();
+                    renderGravitySummary();
+                }
+            } catch (error) {
+                console.error('Failed to load fuel gravity summary:', error);
+            }
+        }
+
+        // Mirrors the server's own console.log trace (see api/fuel_farm/gravity.js)
+        // so the averaging inputs are also visible from the browser console on
+        // the deployed site, without needing to pull Vercel's function logs.
+        function logGravityDebug() {
+            if (!gravityAverage || !gravityAverage.debug) {
+                console.log('[gravity avg] no readings in window yet');
+                return;
+            }
+            const d = gravityAverage.debug;
+            console.log(`[gravity avg] window target ${d.windowTargetGallons.toLocaleString()} gal (T2-T7 capacity ${d.farmCapacityGallons.toLocaleString()} gal), using ${d.included.length}/${d.fetchedCount} fetched reading(s) -> ${gravityAverage.apiGravity60}° API`);
+            console.table(d.included);
+        }
+
+        function renderGravitySummary() {
+            const container = document.getElementById('gravityPanelCurrent');
+            if (!gravityAverage) {
+                container.innerHTML = '<div class="gravity-empty">No loads logged yet</div>';
+                return;
+            }
+
+            const atTempItem = gravityAverage.atTemp
+                ? `<div class="gravity-item">
+                       <div class="gravity-label">@ ${Math.round(gravityAverage.atTemp.tempF)}&deg;F</div>
+                       <div class="gravity-value">${gravityAverage.atTemp.densityLbsGal.toFixed(3)} lbs/gal</div>
+                   </div>`
+                : '';
+
+            container.innerHTML = `
+                <div class="gravity-item">
+                    <div class="gravity-label">Mixed API Gravity</div>
+                    <div class="gravity-value">${gravityAverage.apiGravity60.toFixed(2)}&deg;</div>
+                </div>
+                <div class="gravity-item">
+                    <div class="gravity-label">Mixed Sp. Gravity</div>
+                    <div class="gravity-value">${gravityAverage.specificGravity60.toFixed(4)}</div>
+                </div>
+                <div class="gravity-item">
+                    <div class="gravity-label">Density @ 60&deg;F</div>
+                    <div class="gravity-value">${gravityAverage.densityLbsGal60.toFixed(3)} lbs/gal</div>
+                </div>
+                ${atTempItem}
+                <div class="gravity-item">
+                    <div class="gravity-label">Loads in Window</div>
+                    <div class="gravity-value">${gravityAverage.sampleCount} (${Math.round(gravityAverage.totalGallons).toLocaleString()} gal)</div>
+                </div>
+            `;
+        }
+
+        function toggleGravityPanel() {
+            const panel = document.getElementById('gravityPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            if (panel.style.display === 'block') {
+                document.getElementById('gravityResult').style.display = 'none';
+            }
+        }
+
+        async function saveGravityReading() {
+            const observedTempF = parseFloat(document.getElementById('gravityObservedTemp').value);
+            const observedApiGravity = parseFloat(document.getElementById('gravityObservedApi').value);
+            const wheelApiGravity60 = parseFloat(document.getElementById('gravityWheelApi60').value);
+            const driverApiGravity = parseFloat(document.getElementById('gravityDriverApi').value);
+            const driverSgRaw = document.getElementById('gravityDriverSg').value.trim();
+            const driverSpecificGravity = driverSgRaw === '' ? null : parseFloat(driverSgRaw);
+            const gallonsDelivered = parseFloat(document.getElementById('gravityGallons').value);
+
+            if ([observedTempF, observedApiGravity, wheelApiGravity60, driverApiGravity, gallonsDelivered].some(isNaN)) {
+                showError('Fill in temp, hydrometer reading, wheel reading, driver gravity, and gallons delivered');
+                return;
+            }
+            if (driverSpecificGravity !== null && isNaN(driverSpecificGravity)) {
+                showError("Driver's specific gravity must be a number");
+                return;
+            }
+
+            const saveBtn = document.getElementById('gravitySaveBtn');
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner"></span>Saving...';
+
+            try {
+                const response = await fetch(GRAVITY_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        observedTempF, observedApiGravity, wheelApiGravity60,
+                        driverApiGravity, driverSpecificGravity, gallonsDelivered
+                    })
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    showError(data.error || 'Failed to save gravity reading');
+                    return;
+                }
+
+                renderGravityResult(data);
+
+                ['gravityObservedTemp', 'gravityObservedApi', 'gravityWheelApi60', 'gravityDriverApi', 'gravityDriverSg', 'gravityGallons']
+                    .forEach(id => document.getElementById(id).value = '');
+
+                // Re-fetch rather than using data.average directly so the
+                // at-temp estimate (tied to the last weather poll) is included.
+                loadGravitySummary();
+            } catch (error) {
+                console.error('Failed to save fuel gravity reading:', error);
+                showError('Failed to save fuel gravity reading');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = 'Save';
+            }
+        }
+
+        function renderGravityResult(data) {
+            const el = document.getElementById('gravityResult');
+            const delta = Math.abs(data.reading.wheel_api_gravity_60 - data.reading.driver_api_gravity).toFixed(2);
+
+            el.className = 'gravity-result ' + (data.acceptable ? 'acceptable' : 'rejected');
+            el.innerHTML = data.acceptable
+                ? `&#9989; Acceptable &mdash; &Delta; ${delta}&deg; API vs. driver`
+                : `&#10060; Reject &mdash; &Delta; ${delta}&deg; API exceeds &plusmn;1.0`;
+
+            if (data.formulaMismatch) {
+                el.innerHTML += `<span class="gravity-result-note">&#9888;&#65039; Computed cross-check (${data.computedApiGravity60}&deg;) differs from the wheel reading by more than 0.3&deg; &mdash; double-check the wheel reading.</span>`;
+            }
+
+            el.style.display = 'block';
         }
     </script>
 </body>

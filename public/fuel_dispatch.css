@@ -213,6 +213,12 @@
     color: #2c3e50;
 }
 
+.density-source {
+    font-size: 10px;
+    color: #999;
+    margin-top: 2px;
+}
+
 /* Filter toggle styles */
 .filter-controls {
     background: rgba(255, 255, 255, 0.95);
