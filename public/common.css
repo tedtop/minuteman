@@ -202,6 +202,17 @@ body {
     .trend-minmax {
         font-size: 11px;
         color: #888;
+        margin-bottom: 6px;
+    }
+
+    .trend-ullage {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 700;
+        color: #1e7e34;
+        background: rgba(40, 167, 69, 0.12);
+        padding: 3px 9px;
+        border-radius: 10px;
         margin-bottom: 10px;
     }
 

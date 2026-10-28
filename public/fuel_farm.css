@@ -135,6 +135,11 @@
     box-shadow: 0 -2px 10px rgba(23, 162, 184, 0.3);
 }
 
+.fuel-level.over-max {
+    background: repeating-linear-gradient(45deg, #dc3545, #dc3545 10px, #c82333 10px, #c82333 20px);
+    box-shadow: 0 -2px 10px rgba(220, 53, 69, 0.5);
+}
+
 .level-markers {
     position: absolute;
     left: -10px;
@@ -168,16 +173,33 @@
     margin-bottom: 5px;
 }
 
-.level-percentage {
+.level-gallons {
     font-size: 14px;
-    color: #6c757d;
+    font-weight: 400;
+    color: #000;
     margin-bottom: 5px;
 }
 
-.level-gallons {
-    font-size: 14px;
-    color: #6c757d;
+.level-percentage {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.level-ullage {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e7e34;
+    background: rgba(40, 167, 69, 0.12);
+    padding: 4px 10px;
+    border-radius: 12px;
     margin-bottom: 15px;
+}
+
+.level-ullage.over-max {
+    color: #c0392b;
+    background: rgba(220, 53, 69, 0.14);
 }
 
 .update-section {
@@ -280,7 +302,7 @@
     .tank-card:first-child {
         margin-left: 0;
     }
-    
+
     .tank-card:last-child {
         margin-right: 15px;
     }

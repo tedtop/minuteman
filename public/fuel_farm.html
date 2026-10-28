@@ -30,6 +30,7 @@
                         <span class="trend-total" id="trendTotal">-- gal</span>
                     </div>
                     <div class="trend-minmax" id="trendMinMax"></div>
+                    <div class="trend-ullage" id="trendUllage"></div>
                     <div class="trend-chart-wrap" id="trendChartWrap">
                         <svg class="trend-chart" id="trendChart" viewBox="0 0 400 150" preserveAspectRatio="none">
                             <polyline id="trendArea" class="trend-area" points=""></polyline>
@@ -192,12 +193,40 @@
             });
         }
 
+        // Red (at/below a 10" reading - where these tanks actually run
+        // empty, recorded lows cluster 8-16") -> black (at usable-max), for
+        // the "X% full" readout. Anchored to the absolute inches reading
+        // rather than percentage, per actual low-end behavior. Over-max is
+        // forced back to red at the call site, not handled here.
+        const LEVEL_COLOR_REDPOINT_INCHES = 10;
+
+        function levelColor(level, usableMax) {
+            const t = Math.max(0, Math.min(1, (level - LEVEL_COLOR_REDPOINT_INCHES) / (usableMax - LEVEL_COLOR_REDPOINT_INCHES)));
+            const from = [192, 57, 43]; // #c0392b
+            const to = [0, 0, 0];       // #000000
+            const [r, g, b] = from.map((c, i) => Math.round(c + (to[i] - c) * t));
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
         // --- Jet A trend widget (T2-T7 total gallons, header-left) ---
 
         function jetATotalGallons(levels) {
             return JET_A_TANKS.reduce((sum, tankId) => {
                 const level = levels[tankId];
                 return sum + (level != null ? inchesToGallons(tankId, level) : 0);
+            }, 0);
+        }
+
+        // Total room left across T2-T7 before any of them hits its usable-max
+        // line. A tank already over its usable max contributes 0, not a
+        // negative number - its overfill can't free up room in another tank.
+        function jetATotalUllage(levels) {
+            return JET_A_TANKS.reduce((sum, tankId) => {
+                const tank = tanks[tankId];
+                const level = levels[tankId];
+                if (!tank || level == null) return sum;
+                const roomGallons = inchesToGallons(tankId, tank.usableMax) - inchesToGallons(tankId, level);
+                return sum + Math.max(0, roomGallons);
             }, 0);
         }
 
@@ -273,6 +302,9 @@
             });
             const currentTotal = jetATotalGallons(liveLevels);
             totalEl.textContent = `${Math.round(currentTotal).toLocaleString()} gal`;
+
+            const totalUllage = Math.round(jetATotalUllage(liveLevels));
+            document.getElementById('trendUllage').textContent = `Ullage: ${totalUllage.toLocaleString()} gal available`;
 
             if (!trendHistory) return;
 
@@ -400,9 +432,15 @@
                 card.className += ' lf';
             }
 
-            const percentage = Math.min(100, Math.round((tank.level / tank.usableMax) * 100));
+            const rawPercentage = Math.round((tank.level / tank.usableMax) * 100);
             const levelHeight = Math.min(100, (tank.level / tank.usableMax) * 100);
             const fuelTypeClass = tank.fuelType === 'Avgas' ? 'avgas' : 'jet-a';
+            const isOverMax = tank.level > tank.usableMax;
+
+            // Ullage: how many more gallons fit before the usable-max line.
+            // Lets a driver check this before a delivery instead of subtracting
+            // strapping-table gallons on a calculator by hand.
+            const ullageGallons = Math.round(inchesToGallons(tankId, tank.usableMax) - inchesToGallons(tankId, tank.level));
 
             card.innerHTML = `
                 <div class="tank-header">
@@ -411,7 +449,7 @@
                 </div>
 
                 <div class="tank-visual">
-                    <div class="fuel-level ${fuelTypeClass}" style="height: ${levelHeight}%"></div>
+                    <div class="fuel-level ${fuelTypeClass}${isOverMax ? ' over-max' : ''}" style="height: ${levelHeight}%"></div>
                     <div class="level-markers">
                         ${generateMarkers(tank.usableMax)}
                     </div>
@@ -419,8 +457,9 @@
 
                 <div class="level-info">
                     <div class="current-level">${tank.level}"</div>
-                    <div class="level-percentage">${percentage}% (${tank.usableMax}" max)</div>
                     <div class="level-gallons">${Math.round(inchesToGallons(tankId, tank.level)).toLocaleString()} gal</div>
+                    <div class="level-percentage" style="color: ${isOverMax ? '#c0392b' : levelColor(tank.level, tank.usableMax)}">${isOverMax ? `⚠️ ${rawPercentage}% — over ${tank.usableMax}" line` : `${rawPercentage}% full`}</div>
+                    <div class="level-ullage${isOverMax ? ' over-max' : ''}">${isOverMax ? `${Math.abs(ullageGallons).toLocaleString()} gal over the line` : `Ullage: ${ullageGallons.toLocaleString()} gal to ${tank.usableMax}"`}</div>
                 </div>
 
                 <div class="update-section">
@@ -516,9 +555,13 @@
                 return;
             }
 
-            // Floor entries above the usable max instead of rejecting them
-            if (level > tank.usableMax) {
-                level = tank.usableMax;
+            // Only reject entries above the tank's physical limit. Readings
+            // above usableMax (the normal-ops ceiling) are recorded as-is so
+            // an overfill shows up at its real level instead of being
+            // silently capped at the usable-max line.
+            if (level > tank.maxLevel) {
+                showError(`${tankId} cannot exceed ${tank.maxLevel}" (physical tank limit)`);
+                return;
             }
 
             // Update the display immediately for better UX (works even offline)
