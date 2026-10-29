@@ -129,7 +129,14 @@
             // Set initial loading status
             updateStatus('loading');
 
-            // Load initial data
+            // Render whatever we last had cached immediately (no blank/zeroed
+            // flash while the first fetch is in flight), then load live data.
+            const cachedTanks = getTanksCache();
+            if (cachedTanks && cachedTanks.tanks) {
+                tanks = cachedTanks.tanks;
+                renderTanks();
+                updateJetATrend();
+            }
             loadTankData();
 
             loadJetATrendHistory(trendRange);
@@ -166,47 +173,87 @@
                 const response = await fetch(`${API_BASE_URL}/tanks`);
                 const data = await response.json();
 
-                if (data.success) {
+                if (data.success && data.dbConnected) {
                     clearFarmFailure();
                     tanks = data.tanks;
+                    setTanksCache(tanks);
                     // Don't blow away an in-progress edit on a focused input
                     if (!isUserEnteringData()) {
                         renderTanks();
                     }
                     updateJetATrend();
-                    // Only show refresh counter if database is connected and working
-                    if (data.dbConnected) {
-                        startRefreshCounter();
-                    } else {
-                        // Stop any existing refresh counter and show offline status
-                        if (countdownInterval) {
-                            clearInterval(countdownInterval);
-                        }
-                        // Stop the background refresh interval when database is offline
-                        if (refreshInterval) {
-                            clearInterval(refreshInterval);
-                            refreshInterval = null;
-                        }
-                        updateStatus('disconnected');
-                    }
-                } else {
-                    recordFarmFailure('Failed to load tank data');
-                    // Stop the background refresh interval on failure
-                    if (refreshInterval) {
-                        clearInterval(refreshInterval);
-                        refreshInterval = null;
-                    }
-                    updateStatus('disconnected');
+                    startRefreshCounter();
+                    return;
                 }
+
+                // DB/server unreachable: the server itself still answers with
+                // success:true, dbConnected:false and all-zeroed tank levels
+                // (see api/fuel_farm/tanks.js) so this endpoint never hard-errors,
+                // but that zeroed placeholder is not something to actually show -
+                // fall back to cached/last-known levels instead.
+                handleTanksUnavailable(data.success ? null : (data.error || 'Failed to load tank data'));
             } catch (error) {
                 console.error('Error loading tank data:', error);
-                recordFarmFailure('Connection error: ' + error.message);
-                // Stop the background refresh interval on connection error
-                if (refreshInterval) {
-                    clearInterval(refreshInterval);
-                    refreshInterval = null;
+                handleTanksUnavailable('Connection error: ' + error.message);
+            }
+        }
+
+        // Never overwrite a good display with zeroed/placeholder data. If we
+        // don't already have real data on screen, fall back to whatever was
+        // cached in localStorage from the last successful fetch (survives a
+        // full page reload during an outage, which is the case that used to
+        // render every tank at 0" / 0% full with a 1969 "last updated").
+        function handleTanksUnavailable(hardErrorMessage) {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+
+            if (!hasAnyTankData(tanks)) {
+                const cached = getTanksCache();
+                if (cached && cached.tanks) {
+                    tanks = cached.tanks;
+                    if (!isUserEnteringData()) {
+                        renderTanks();
+                    }
+                    updateJetATrend();
                 }
-                updateStatus('disconnected');
+            }
+
+            if (hasAnyTankData(tanks)) {
+                const cache = getTanksCache();
+                const asOf = cache ? new Date(cache.cachedAt).toLocaleString() : 'this session';
+                recordFarmFailure(`Database offline — showing cached levels from ${asOf}`);
+            } else {
+                // Truly nothing to show - never had a successful fetch this
+                // session or in a prior one. Leave the tank area empty
+                // (nothing real to render) and let the banner say why.
+                recordFarmFailure(hardErrorMessage || 'Database offline — no cached levels available yet');
+            }
+
+            updateStatus('disconnected');
+        }
+
+        function hasAnyTankData(tanksObj) {
+            return Object.values(tanksObj || {}).some(t => t && t.lastUpdated);
+        }
+
+        const TANKS_CACHE_KEY = 'fuelFarmTanks:v1';
+
+        function getTanksCache() {
+            try {
+                const raw = localStorage.getItem(TANKS_CACHE_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function setTanksCache(tanksData) {
+            try {
+                localStorage.setItem(TANKS_CACHE_KEY, JSON.stringify({ tanks: tanksData, cachedAt: new Date().toISOString() }));
+            } catch (error) {
+                // localStorage unavailable/full - not critical, just skip caching
             }
         }
 
@@ -663,6 +710,7 @@
         }
 
         function formatDateTime(isoString) {
+            if (!isoString) return 'never';
             const date = new Date(isoString);
             return date.toLocaleString();
         }
