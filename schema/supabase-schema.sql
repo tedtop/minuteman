@@ -36,22 +36,6 @@ AS $$
     ORDER BY tank_id, recorded_at DESC;
 $$;
 
--- Function to get the lowest level ever recorded for each tank, used as a
--- data-driven stand-in for "unusable fuel" - how low that tank has actually
--- been able to go, rather than the configured usableMin in tanks.js.
-CREATE OR REPLACE FUNCTION get_min_tank_readings()
-RETURNS TABLE (
-    tank_id VARCHAR(10),
-    level DECIMAL(5,2)
-)
-LANGUAGE SQL
-STABLE
-AS $$
-    SELECT tank_id, MIN(level) AS level
-    FROM tank_level_readings
-    GROUP BY tank_id;
-$$;
-
 COMMENT ON TABLE tank_level_readings IS 'Time-series tank level readings. Tank configuration stored in application code.';
 
 -- Create fuel_density_readings table (hydrometer readings: fuel temp + density)
@@ -164,3 +148,51 @@ CREATE TABLE IF NOT EXISTS adsb_point_cache (
 );
 
 COMMENT ON TABLE adsb_point_cache IS 'Singleton row holding the last adsb.lol point-query aircraft list around KMSO, so all clients share one upstream request per 60s cache window across serverless cold starts.';
+
+-- Materialized per-tank lowest-ever-recorded level (backs the unusable-fuel
+-- shading on the fuel farm page). An earlier draft had /api/fuel_farm/tanks
+-- call a get_min_tank_readings() RPC (a full table scan + GROUP BY/MIN) on
+-- every poll - every open tab re-fires that every 30s via POLL_INTERVAL.
+-- Harmless at today's row count, but it's the one query whose cost scales
+-- with total history forever, so api/fuel_farm/tanks.js reads this cache
+-- instead and only updates it (via update_tank_level_min, below) when a new
+-- reading actually beats the current low - an O(1) check on write instead
+-- of an O(n) scan on every read. get_min_tank_readings() itself is still
+-- live (harmless, unused) but intentionally dropped from this file - nothing
+-- calls it, so there's nothing to keep in sync, and removing an unused but
+-- otherwise harmless function from a database shared with another
+-- application isn't worth the risk for a cleanup with zero functional gain.
+CREATE TABLE IF NOT EXISTS tank_level_min (
+    tank_id     VARCHAR(10) PRIMARY KEY,
+    level       DECIMAL(5,2) NOT NULL,
+    recorded_at TIMESTAMPTZ NOT NULL
+);
+
+COMMENT ON TABLE tank_level_min IS 'One row per tank: the lowest level ever recorded, kept in sync by update_tank_level_min() on each new reading so /api/fuel_farm/tanks never recomputes MIN(level) over the full history on every poll.';
+
+-- Guarded upsert: only overwrites a tank's cached low if the new reading is
+-- actually lower, so it's safe to call unconditionally after every insert.
+CREATE OR REPLACE FUNCTION update_tank_level_min(
+    p_tank_id VARCHAR(10),
+    p_level DECIMAL(5,2),
+    p_recorded_at TIMESTAMPTZ
+)
+RETURNS VOID
+LANGUAGE SQL
+AS $$
+    INSERT INTO tank_level_min (tank_id, level, recorded_at)
+    VALUES (p_tank_id, p_level, p_recorded_at)
+    ON CONFLICT (tank_id) DO UPDATE
+        SET level = EXCLUDED.level, recorded_at = EXCLUDED.recorded_at
+        WHERE EXCLUDED.level < tank_level_min.level;
+$$;
+
+-- One-time backfill from existing history. Safe to re-run: ON CONFLICT only
+-- keeps the result if it's actually lower than what's already cached.
+INSERT INTO tank_level_min (tank_id, level, recorded_at)
+SELECT DISTINCT ON (tank_id) tank_id, level, recorded_at
+FROM tank_level_readings
+ORDER BY tank_id, level ASC, recorded_at ASC
+ON CONFLICT (tank_id) DO UPDATE
+    SET level = EXCLUDED.level, recorded_at = EXCLUDED.recorded_at
+    WHERE EXCLUDED.level < tank_level_min.level;

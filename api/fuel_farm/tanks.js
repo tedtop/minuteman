@@ -59,8 +59,12 @@ async function getLatestReadings() {
 async function getMinReadings() {
     if (!supabase) throw new Error('Database not configured');
 
+    // Reads the tank_level_min cache table rather than calling
+    // get_min_tank_readings() (a full-table scan) on every poll - see
+    // schema/supabase-schema.sql for why.
     const { data, error } = await supabase
-        .rpc('get_min_tank_readings');
+        .from('tank_level_min')
+        .select('tank_id, level');
 
     if (error) throw error;
     return data || [];
@@ -69,17 +73,30 @@ async function getMinReadings() {
 async function recordTankLevel(tankId, level) {
     if (!supabase) throw new Error('Database not configured');
 
+    const recordedAt = new Date().toISOString();
     const { data, error } = await supabase
         .from('tank_level_readings')
         .insert({
             tank_id: tankId,
             level: level,
-            recorded_at: new Date().toISOString()
+            recorded_at: recordedAt
         })
         .select()
         .single();
 
     if (error) throw error;
+
+    // Guarded upsert (only overwrites if this is actually a new low) -
+    // keeps the tank_level_min cache in sync. Logged but not fatal: the
+    // reading itself is already recorded, and the next lower reading (or
+    // a manual re-run of the schema's backfill query) will catch it up.
+    const { error: minError } = await supabase.rpc('update_tank_level_min', {
+        p_tank_id: tankId,
+        p_level: level,
+        p_recorded_at: recordedAt
+    });
+    if (minError) console.error('Failed to update tank_level_min cache:', minError);
+
     return data;
 }
 
