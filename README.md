@@ -88,6 +88,7 @@ schema/
 |--------|------|-------------|
 | GET | `/api/config` | App configuration |
 | POST | `/api/dispatch` | QT dispatch data |
+| GET | `/api/flight_track` | Live ADS-B arrival tracking (adsb.lol) |
 | GET | `/api/metar` | KMSO weather |
 | GET/POST | `/api/fuel_density` | Fuel density readings |
 | GET/POST | `/api/fuel_farm/tanks` | Tank levels |

@@ -113,11 +113,26 @@
         let dispatchChanges = new Map(); // FlightID -> {fuel: [...], gate: [...], time: [...]} - every transition kept, oldest first
         const CHANGE_RETENTION_MS = 3 * 60 * 60 * 1000; // stop flagging a change after 3 hours
         const GATE_UNKNOWN_VALUES = new Set([null, undefined, '', '?']);
+        // "-", "?" and "0" are QT's placeholder TerminalNumber values for gates
+        // that aren't inside a lettered concourse (see the Terminals reference
+        // list QT sends alongside Dispatches) - in those cases the bare gate
+        // number is the whole story, there's no "A"/"B" prefix to add.
+        const TERMINAL_UNKNOWN_VALUES = new Set([null, undefined, '', '-', '?', '0']);
 
         // Configuration - dynamically determine the proxy URL
         const LOCAL_PROXY_URL = `${window.location.protocol}//${window.location.host}`;
         const DISPATCH_ENDPOINT = '/api/dispatch';
         const POLL_INTERVAL = 30000; // 30 seconds
+
+        // Live ADS-B position overlay for inbound ("Planned") flights, from
+        // /api/flight_track. Purely an enrichment on top of QT's own times -
+        // failures never touch the error banner, and most inbound flights won't
+        // be within ADS-B range of KMSO, so an absent entry is the normal case.
+        const FLIGHT_TRACK_INTERVAL = 60000; // matches the server's adsb.lol cache window
+        const COUNTDOWN_RENDER_INTERVAL = 15000; // keeps "in Xm" text current between polls
+        let flightTrackData = new Map(); // TAILNUMBER -> { distanceNm, groundSpeedKt, altitudeFt, onGround, etaMinutes }
+        let flightTrackInterval = null;
+        let countdownRenderInterval = null;
 
         // Fuel density estimation (driven by the shared weather widget's "weather:update" event).
         // Prefers the fuel farm's gravity-QC rolling average (api/fuel_farm/gravity.js -
@@ -253,9 +268,57 @@
 
             updateStatus('connecting');
             await fetchDispatchData();
+            fetchFlightTrackData();
 
             // Start automatic refresh countdown
             startRefreshCountdown();
+            startOverlayTimers();
+        }
+
+        // Runs alongside the 30s dispatch poll (startRefreshCountdown), not
+        // inside it, so the ADS-B overlay and countdown re-render keep their
+        // own cadence.
+        function startOverlayTimers() {
+            stopOverlayTimers();
+            flightTrackInterval = setInterval(fetchFlightTrackData, FLIGHT_TRACK_INTERVAL);
+            countdownRenderInterval = setInterval(() => {
+                if (currentDispatches) displayDispatchData(currentDispatches);
+            }, COUNTDOWN_RENDER_INTERVAL);
+        }
+
+        function stopOverlayTimers() {
+            if (flightTrackInterval) clearInterval(flightTrackInterval);
+            if (countdownRenderInterval) clearInterval(countdownRenderInterval);
+            flightTrackInterval = null;
+            countdownRenderInterval = null;
+        }
+
+        function normalizeTail(tail) {
+            return typeof tail === 'string' ? tail.trim().toUpperCase() : '';
+        }
+
+        async function fetchFlightTrackData() {
+            if (!currentDispatches) return;
+
+            const tails = [...new Set(
+                currentDispatches
+                    .filter(d => d.FlightStatus === 'Planned' && d.TailNumber && d.ArrivalDate)
+                    .map(d => normalizeTail(d.TailNumber))
+                    .filter(Boolean)
+            )];
+            if (tails.length === 0) return;
+
+            try {
+                const response = await fetch(`${LOCAL_PROXY_URL}/api/flight_track?tails=${encodeURIComponent(tails.join(','))}`);
+                if (!response.ok) throw new Error(`flight_track responded ${response.status}`);
+                const data = await response.json();
+                flightTrackData = new Map(
+                    Object.entries(data.tracked || {}).map(([tail, track]) => [normalizeTail(tail), track])
+                );
+                if (currentDispatches) displayDispatchData(currentDispatches);
+            } catch (error) {
+                console.error('Failed to fetch ADS-B flight tracking:', error);
+            }
         }
 
         // Fetch dispatch data from QT Technologies
@@ -533,6 +596,58 @@
                 ? `<div class="dispatch-alerts">${alertBlocks.join('')}</div>`
                 : '';
 
+            let arrivalCountdownHtml = '';
+            let departureCountdownHtml = '';
+            let timeOnGroundHtml = '';
+
+            if (dispatch.FlightStatus === 'Planned') {
+                const track = flightTrackData.get(normalizeTail(dispatch.TailNumber));
+                if (track && !track.onGround && track.etaMinutes != null) {
+                    const etaText = `in ~${formatMinutes(Math.max(1, Math.round(track.etaMinutes)))}`;
+                    const trackTitle = `ADS-B: ${Math.round(track.distanceNm)} nm out at ${Math.round(track.groundSpeedKt)} kt`
+                        + (track.altitudeFt != null ? `, ${track.altitudeFt.toLocaleString()} ft` : '');
+                    arrivalCountdownHtml = `<div class="info-sub${urgencyClass(track.etaMinutes)}" title="${trackTitle}">${etaText} <span class="live-badge">live</span></div>`;
+                } else {
+                    arrivalCountdownHtml = `<div class="info-sub${urgencyClass(countdownMinutes(dispatch.ArrivalDate))}">${formatCountdown(dispatch.ArrivalDate)}</div>`;
+                }
+            } else if (dispatch.FlightStatus === 'In') {
+                departureCountdownHtml = `<div class="info-sub${urgencyClass(countdownMinutes(dispatch.DepartureDate))}">${formatCountdown(dispatch.DepartureDate)}</div>`;
+                // QT's TimeOnGround is the scheduled turn (DepartureDate - ArrivalDate),
+                // not elapsed time - it's present on Planned flights too (as the literal
+                // string "Unknown" when even that isn't set) - so elapsed is computed
+                // from ArrivalDate and QT's figure shown for reference.
+                const scheduledTurn = (dispatch.TimeOnGround && dispatch.TimeOnGround !== 'Unknown')
+                    ? `<div class="info-sub">of ${escapeHtml(dispatch.TimeOnGround)} scheduled</div>`
+                    : '';
+                timeOnGroundHtml = `
+                    <div class="info-item">
+                        <div class="info-label">Time on Ground</div>
+                        <div class="info-value">${formatElapsedSince(dispatch.ArrivalDate)}</div>
+                        ${scheduledTurn}
+                    </div>`;
+            }
+
+            // Gate is already tracked for change-detection (dispatchChanges.gate)
+            // but was never shown as a plain field - unlike most per-flight QT
+            // data it's reliably populated (confirmed against a live payload),
+            // so it's worth the one line here. Folded into the tail/type box
+            // rather than its own grid item, to keep Arrival/Departure paired
+            // on one row. QT's own UI (and the ramp signage) identifies a gate
+            // by Terminal+Gate together (e.g. "A4", "B2"), not the bare gate
+            // number alone - matching that avoids a gate that reads ambiguous
+            // or looks "wrong" next to the physical signage.
+            const aircraftSubParts = [];
+            if (dispatch.AircraftType) aircraftSubParts.push(dispatch.AircraftType);
+            if (!GATE_UNKNOWN_VALUES.has(dispatch.Gate)) {
+                const gateLabel = TERMINAL_UNKNOWN_VALUES.has(dispatch.TerminalNumber)
+                    ? dispatch.Gate
+                    : `${dispatch.TerminalNumber}${dispatch.Gate}`;
+                aircraftSubParts.push(`Gate ${escapeHtml(gateLabel)}`);
+            }
+            const aircraftSubtext = aircraftSubParts.length
+                ? `<div class="info-sub">${aircraftSubParts.join(' &middot; ')}</div>`
+                : '';
+
             card.innerHTML = `
                 <div class="flight-header">
                     <div class="flight-number">${fr24Url ? `<a class="fr24-link" href="${fr24Url}" target="_blank" rel="noopener noreferrer">${flightTitle}</a>` : flightTitle}</div>
@@ -543,19 +658,23 @@
                     <div class="info-item">
                         <div class="info-label">Tail Number</div>
                         <div class="info-value">${fr24Url ? `<a class="fr24-link" href="${fr24Url}" target="_blank" rel="noopener noreferrer">${tailNumberDisplay}</a>` : tailNumberDisplay}</div>
+                        ${aircraftSubtext}
                     </div>
                     <div class="info-item">
                         <div class="info-label">Airline</div>
                         <div class="info-value airline-value">${dispatch.AirlineName}</div>
                     </div>
                     <div class="info-item">
-                        <div class="info-label">Aircraft Type</div>
-                        <div class="info-value">${dispatch.AircraftType || 'N/A'}</div>
+                        <div class="info-label">Arrival</div>
+                        <div class="info-value">${formatDateTime(dispatch.ArrivalDate)}</div>
+                        ${arrivalCountdownHtml}
                     </div>
                     <div class="info-item">
                         <div class="info-label">Departure</div>
                         <div class="info-value">${formatDateTime(dispatch.DepartureDate)}</div>
+                        ${departureCountdownHtml}
                     </div>
+                    ${timeOnGroundHtml}
                 </div>
 
                 <div class="fuel-info">
@@ -575,9 +694,17 @@
         }
 
         function formatTimeOnly(dateString) {
-            if (!dateString) return 'N/A';
+            if (isQtNullDate(dateString)) return 'N/A';
             const date = new Date(dateString);
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // QT sends "0001-01-01 00:00" (.NET's DateTime.MinValue) rather than
+        // null for a date that hasn't been assigned yet (seen on ArrivalDate
+        // for some Planned flights). Treat it the same as missing, rather than
+        // parsing it into a nonsense date and a multi-million-hour countdown.
+        function isQtNullDate(dateString) {
+            return !dateString || dateString.startsWith('0001-01-01');
         }
 
         function escapeHtml(str) {
@@ -588,9 +715,63 @@
 
         // Utility functions
         function formatDateTime(dateString) {
-            if (!dateString) return 'N/A';
+            if (isQtNullDate(dateString)) return 'N/A';
             const date = new Date(dateString);
             return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // QT dates are "YYYY-MM-DD HH:MM" in KMSO local time. The space-separated
+        // form isn't guaranteed to parse in every browser (older Safari returns
+        // Invalid Date); the "T" form is spec'd and parses as local time.
+        function parseQtDate(dateString) {
+            if (isQtNullDate(dateString)) return null;
+            const date = new Date(dateString.replace(' ', 'T'));
+            return isNaN(date) ? null : date;
+        }
+
+        function formatMinutes(totalMinutes) {
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+        }
+
+        function formatCountdown(dateString) {
+            const date = parseQtDate(dateString);
+            if (!date) return 'N/A';
+            const diffMinutes = Math.round((date.getTime() - Date.now()) / 60000);
+            if (Math.abs(diffMinutes) <= 1) return 'any moment';
+            return diffMinutes > 0
+                ? `in ${formatMinutes(diffMinutes)}`
+                : `overdue by ${formatMinutes(-diffMinutes)}`;
+        }
+
+        // Signed minutes until dateString (negative once overdue), or null if
+        // there's nothing to count down to. Separate from formatCountdown's
+        // display text so the urgency color below can react to the same value.
+        function countdownMinutes(dateString) {
+            const date = parseQtDate(dateString);
+            return date ? (date.getTime() - Date.now()) / 60000 : null;
+        }
+
+        const URGENCY_CRITICAL_MINUTES = 15;
+        const URGENCY_WARN_MINUTES = 45;
+
+        // Orange inside the warn window, red inside the critical window or
+        // already overdue (negative minutes), nothing once it's comfortably
+        // far out. Applies the same way to a QT-based countdown, a live ADS-B
+        // ETA, or an overdue one - it only cares how many minutes are left.
+        function urgencyClass(minutes) {
+            if (minutes == null) return '';
+            if (minutes <= URGENCY_CRITICAL_MINUTES) return ' urgency-critical';
+            if (minutes <= URGENCY_WARN_MINUTES) return ' urgency-warn';
+            return '';
+        }
+
+        function formatElapsedSince(dateString) {
+            const date = parseQtDate(dateString);
+            if (!date) return 'N/A';
+            const elapsedMinutes = Math.round((Date.now() - date.getTime()) / 60000);
+            return elapsedMinutes < 1 ? 'just in' : formatMinutes(elapsedMinutes);
         }
 
         let refreshCountdown = 30;
@@ -717,6 +898,7 @@
 
             // Set up polling interval
             monitoringInterval = setInterval(fetchDispatchData, POLL_INTERVAL);
+            startOverlayTimers();
         }
 
         function stopMonitoring() {
@@ -725,6 +907,7 @@
                 clearInterval(monitoringInterval);
                 monitoringInterval = null;
             }
+            stopOverlayTimers();
             updateStatus('disconnected');
         }
 

@@ -40,43 +40,25 @@ files, each page having its own `<page>.css` alongside the shared
   window event; `fuel_dispatch.html` listens for it to drive the fuel
   density estimate.
 
-## No Service Worker (removed October 2026)
+## Arrival Tracking / Live ADS-B ETA (added October 2026)
 
-The app used to have a `public/sw.js` precaching the dispatch page's shell
-cache-first for offline/PWA support. It was removed: both pages are useless
-without a live connection (dispatch needs QT, fuel farm needs Supabase), so
-there was never a real offline mode to support — only a recurring "stale
-shell" bug where installed/previously-visited clients kept serving old
-CSS/HTML until someone remembered to bump `CACHE_NAME` on deploy. That
-bump-discipline requirement is gone along with the service worker.
+Dispatch cards show Arrival as well as Departure, a live countdown to arrival
+for `Planned` flights, and time-on-ground plus a departure countdown for `In`
+flights. QT's `TimeOnGround` field is the *scheduled* turn
+(`DepartureDate − ArrivalDate`, present on Planned flights too), not elapsed
+time, so elapsed is computed client-side from `ArrivalDate`. Inbound ETAs are
+enriched by `/api/flight_track` using adsb.lol — chosen over airplanes.live
+(its API is now gated behind emailing them for access) and FlightRadar24
+(the real API is a separate paid product from the personal subscription
+already in use).
 
-`public/sw.js` still exists, but only as a one-time cleanup script: it
-clears any caches it finds, unregisters itself, and reloads open tabs, so
-that anyone with the old service worker already installed gets flushed back
-to normal network requests. `fuel_dispatch.html` no longer registers it.
-Once existing installs have had time to cycle through this (the old SW has
-to actually run its `activate` handler once), `sw.js` and its `<link
-rel="manifest">`/service-worker-adjacent bits can be deleted outright if the
-PWA "add to home screen" affordance isn't worth keeping either.
-
-## QT Password Rotation (considered, deferred)
-
-QT periodically forces a password reset on the TTMSO account (happened
-2026-10-24, caused a production outage). Today, recovering from this is
-fully manual: reset the password at https://go.qttechnologies.com/ (or call
-QT support per the troubleshooting doc if the account is locked), then
-update `QT_PASSWORD` in Vercel (Development + Production env vars) and
-redeploy for Production to pick it up.
-
-We discussed building self-service recovery directly into the app: a shared
-password gate on the dispatch/farm pages (reusing `QT_PASSWORD` itself,
-since it's already posted physically near the line office computer — no
-new exposure), plus an "Update QT Password" form that verifies the current
-password and pushes the new one to Vercel via its API (needs a
-`VERCEL_API_TOKEN` secret) and triggers a redeploy automatically. Deferred
-for now — manually updating the Vercel env var and redeploying works fine
-and is simple; revisit this if password rotations become frequent enough
-that the manual process is a real burden.
+adsb.lol is free, keyless and has no SLA, and the page polls every 30s from
+several clients at once, so the endpoint makes one shared 250nm point-query
+around KMSO per 60s window (not per tail, not per client), cached in memory
+and in the `adsb_point_cache` Supabase table across cold starts, and falls
+back to stale cache or an empty result on failure. When a tail isn't in ADS-B
+range (most of a flight's transit), the card just shows QT's own time with no
+`live` badge.
 
 ## Fuel Farm Enhancements (TODO)
 - **Enhanced Tank Level Visual Indicators**: color-code the tank fill zones —

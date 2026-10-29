@@ -149,3 +149,18 @@ CREATE TABLE IF NOT EXISTS qt_session (
 );
 
 COMMENT ON TABLE qt_session IS 'Singleton row holding the shared QT Technologies session cookie, so the login session survives serverless cold starts instead of resetting every invocation.';
+-- Shared adsb.lol point-query cache (singleton row) for /api/flight_track.
+-- adsb.lol is a free, keyless public API with no SLA. The dispatch page polls
+-- every 30s from several clients at once, so /api/flight_track makes one
+-- area-wide query (250nm around KMSO) per 60s window and filters it per tail,
+-- instead of querying per tail or per client. Persisted here so the cache
+-- survives serverless cold starts, same reasoning as qt_session above.
+CREATE TABLE IF NOT EXISTS adsb_point_cache (
+    id         SMALLINT PRIMARY KEY DEFAULT 1,
+    aircraft   JSONB NOT NULL,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT adsb_point_cache_singleton CHECK (id = 1)
+);
+
+COMMENT ON TABLE adsb_point_cache IS 'Singleton row holding the last adsb.lol point-query aircraft list around KMSO, so all clients share one upstream request per 60s cache window across serverless cold starts.';
