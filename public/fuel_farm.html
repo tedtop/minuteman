@@ -281,18 +281,22 @@
         }
 
         // Red (at/below a 10" reading - where these tanks actually run
-        // empty, recorded lows cluster 8-16") -> black (at usable-max), for
-        // the "X% full" readout. Anchored to the absolute inches reading
-        // rather than percentage, per actual low-end behavior. Over-max is
-        // forced back to red at the call site, not handled here.
+        // empty, recorded lows cluster 8-16") -> white (at usable-max), as a
+        // pill background for the "X% full" readout. Anchored to the
+        // absolute inches reading rather than percentage, per actual
+        // low-end behavior. Over-max is a solid red pill, handled at the
+        // call site, not here.
         const LEVEL_COLOR_REDPOINT_INCHES = 10;
 
-        function levelColor(level, usableMax) {
+        function levelPillStyle(level, usableMax) {
             const t = Math.max(0, Math.min(1, (level - LEVEL_COLOR_REDPOINT_INCHES) / (usableMax - LEVEL_COLOR_REDPOINT_INCHES)));
-            const from = [192, 57, 43]; // #c0392b
-            const to = [0, 0, 0];       // #000000
+            const from = [192, 57, 43];   // #c0392b
+            const to = [255, 255, 255];   // #ffffff
             const [r, g, b] = from.map((c, i) => Math.round(c + (to[i] - c) * t));
-            return `rgb(${r}, ${g}, ${b})`;
+            // Flip to dark text once the pill's gotten light enough that
+            // white text would stop being readable on it.
+            const textColor = t < 0.55 ? '#ffffff' : '#2c3e50';
+            return `background: rgb(${r}, ${g}, ${b}); color: ${textColor}`;
         }
 
         // --- Jet A trend widget (T2-T7 total gallons, header-left) ---
@@ -555,7 +559,7 @@
                 <div class="level-info">
                     <div class="current-level">${tank.level}"</div>
                     <div class="level-gallons">${Math.round(inchesToGallons(tankId, tank.level)).toLocaleString()} gal</div>
-                    <div class="level-percentage" style="color: ${isOverMax ? '#c0392b' : levelColor(tank.level, tank.usableMax)}">${isOverMax ? `⚠️ ${rawPercentage}% — over ${tank.usableMax}" line` : `${rawPercentage}% full`}</div>
+                    <div class="level-percentage" style="${isOverMax ? 'background: #dc3545; color: #ffffff' : levelPillStyle(tank.level, tank.usableMax)}">${isOverMax ? `⚠️ ${rawPercentage}% — over ${tank.usableMax}" line` : `${rawPercentage}% full`}</div>
                     <div class="level-ullage${isOverMax ? ' over-max' : ''}">${isOverMax ? `${Math.abs(ullageGallons).toLocaleString()} gal over the line` : `Ullage: ${ullageGallons.toLocaleString()} gal to ${tank.usableMax}"`}</div>
                 </div>
 
