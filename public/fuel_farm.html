@@ -540,7 +540,13 @@
             const hasRecordedLow = tank.recordedLow != null;
             const unusableZoneHeight = hasRecordedLow ? Math.min(100, (tank.recordedLow / tank.usableMax) * 100) : 0;
             const unusableGallons = hasRecordedLow ? Math.round(inchesToGallons(tankId, tank.recordedLow)) : 0;
-            const unusableZoneTitle = `${unusableGallons.toLocaleString()} gal unusable below ${tank.recordedLow}&quot; (lowest ever recorded)`;
+
+            // Usable fuel: what's actually pumpable right now - the current
+            // level's gallons less the unusable heel sitting below the lowest
+            // level ever recorded. Clamped at 0 for a tank sitting at (or
+            // under) its own recorded low. The % full pill stays on the raw
+            // level, not this number.
+            const usableGallons = Math.max(0, Math.round(inchesToGallons(tankId, tank.level)) - unusableGallons);
 
             card.innerHTML = `
                 <div class="tank-header">
@@ -548,17 +554,25 @@
                     <div class="fuel-type ${fuelTypeClass}">${tank.fuelType}</div>
                 </div>
 
-                <div class="tank-visual">
-                    <div class="fuel-level ${fuelTypeClass}${isOverMax ? ' over-max' : ''}" style="height: ${levelHeight}%"></div>
-                    ${hasRecordedLow ? `<div class="unusable-zone ${fuelTypeClass}" style="height: ${unusableZoneHeight}%" title="${unusableZoneTitle}"></div>` : ''}
-                    <div class="level-markers">
-                        ${generateMarkers(tank.usableMax)}
+                <div class="tank-visual-wrap">
+                    <div class="tank-visual">
+                        <div class="fuel-level ${fuelTypeClass}${isOverMax ? ' over-max' : ''}" style="height: ${levelHeight}%"></div>
+                        ${hasRecordedLow ? `<div class="unusable-zone ${fuelTypeClass}" style="height: ${unusableZoneHeight}%"></div>` : ''}
+                        <div class="level-markers">
+                            ${generateMarkers(tank.usableMax)}
+                        </div>
                     </div>
+                    ${hasRecordedLow ? `
+                    <div class="unusable-tooltip">
+                        <div class="unusable-tooltip-row"><span>Unusable</span><strong>${unusableGallons.toLocaleString()} gal</strong></div>
+                        <div class="unusable-tooltip-row"><span>Lowest ever</span><strong>${tank.recordedLow}&quot;</strong></div>
+                    </div>` : ''}
                 </div>
 
                 <div class="level-info">
                     <div class="current-level">${tank.level}"</div>
                     <div class="level-gallons">${Math.round(inchesToGallons(tankId, tank.level)).toLocaleString()} gal</div>
+                    ${hasRecordedLow ? `<div class="level-usable">${usableGallons.toLocaleString()} gal usable</div>` : ''}
                     <div class="level-percentage" style="${isOverMax ? 'background: #dc3545; color: #ffffff' : levelPillStyle(tank.level, tank.usableMax)}">${isOverMax ? `⚠️ ${rawPercentage}% — over ${tank.usableMax}" line` : `${rawPercentage}% full`}</div>
                     <div class="level-ullage${isOverMax ? ' over-max' : ''}">${isOverMax ? `${Math.abs(ullageGallons).toLocaleString()} gal over the line` : `Ullage: ${ullageGallons.toLocaleString()} gal to ${tank.usableMax}"`}</div>
                 </div>

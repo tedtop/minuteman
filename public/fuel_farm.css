@@ -165,7 +165,7 @@
 /* Unusable-fuel zone: shaded from the tank bottom up to the lowest level
    ever recorded. Drawn after .fuel-level in the DOM so the tint sits on
    top of it and stays visible even when the current level is well above
-   this line. Hoverable (title attribute) for the gallons/lowest-recorded
+   this line. Hoverable for the .unusable-tooltip gallons/lowest-recorded
    readout, so pointer-events stays enabled here.
 
    Split by fuel type because translucent color-over-color only reads well
@@ -207,6 +207,50 @@
         transparent 6px, transparent 12px);
 }
 
+/* Wrapper for the hover readout only: .tank-visual itself clips its
+   children (overflow: hidden, so the fuel fill stays inside the rounded
+   tank outline), so the tooltip has to live outside it. */
+.tank-visual-wrap {
+    position: relative;
+}
+
+.unusable-tooltip {
+    position: absolute;
+    left: 50%;
+    bottom: 26px;
+    transform: translate(-50%, 6px);
+    z-index: 5;
+    padding: 7px 9px;
+    background: rgba(33, 37, 41, 0.95);
+    color: #fff;
+    border-radius: 8px;
+    font-size: 11px;
+    line-height: 1.5;
+    text-align: left;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.unusable-tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    white-space: nowrap;
+}
+
+.unusable-tooltip-row span {
+    color: #ced4da;
+}
+
+/* :has() because the tooltip is a sibling of the whole tank rather than of
+   the zone itself - it has to escape the tank's overflow clipping. */
+.tank-visual-wrap:has(.unusable-zone:hover) .unusable-tooltip {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
 .level-info {
     margin-top: 20px;
 }
@@ -222,6 +266,13 @@
     font-size: 14px;
     font-weight: 400;
     color: #000;
+    margin-bottom: 5px;
+}
+
+.level-usable {
+    font-size: 12px;
+    font-weight: 600;
+    color: #495057;
     margin-bottom: 5px;
 }
 
