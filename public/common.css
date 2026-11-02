@@ -205,15 +205,32 @@ body {
         margin-bottom: 6px;
     }
 
+    /* Usable and ullage sit on one row: how much Jet A can actually be
+       pumped out, and how much more will fit in. */
+    .trend-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+
+    .trend-usable,
     .trend-ullage {
         display: inline-block;
         font-size: 12px;
         font-weight: 700;
-        color: #1e7e34;
-        background: rgba(40, 167, 69, 0.12);
         padding: 3px 9px;
         border-radius: 10px;
-        margin-bottom: 10px;
+    }
+
+    .trend-usable {
+        color: #3b4bb8;
+        background: rgba(102, 126, 234, 0.14);
+    }
+
+    .trend-ullage {
+        color: #1e7e34;
+        background: rgba(40, 167, 69, 0.12);
     }
 
     .trend-zoom {

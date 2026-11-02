@@ -30,7 +30,10 @@
                         <span class="trend-total" id="trendTotal">-- gal</span>
                     </div>
                     <div class="trend-minmax" id="trendMinMax"></div>
-                    <div class="trend-ullage" id="trendUllage"></div>
+                    <div class="trend-pills">
+                        <span class="trend-usable" id="trendUsable"></span>
+                        <span class="trend-ullage" id="trendUllage"></span>
+                    </div>
                     <div class="trend-chart-wrap" id="trendChartWrap">
                         <svg class="trend-chart" id="trendChart" viewBox="0 0 400 150" preserveAspectRatio="none">
                             <polyline id="trendArea" class="trend-area" points=""></polyline>
@@ -321,6 +324,23 @@
             }, 0);
         }
 
+        // Total pumpable Jet A across T2-T7: each tank's gallons less the
+        // heel sitting below its own lowest-ever recorded level. Rounded per
+        // tank, the same way the cards do it, so this total reconciles with
+        // the "gal usable" lines rather than drifting a gallon or two off.
+        // A tank with no recorded low has no known heel, so all of it counts.
+        function jetATotalUsable(levels) {
+            return JET_A_TANKS.reduce((sum, tankId) => {
+                const tank = tanks[tankId];
+                const level = levels[tankId];
+                if (!tank || level == null) return sum;
+                const unusable = tank.recordedLow != null
+                    ? Math.round(inchesToGallons(tankId, tank.recordedLow))
+                    : 0;
+                return sum + Math.max(0, Math.round(inchesToGallons(tankId, level)) - unusable);
+            }, 0);
+        }
+
         function setTrendLoading(isLoading) {
             const el = document.getElementById('trendLoading');
             if (el) el.style.display = isLoading ? 'flex' : 'none';
@@ -393,6 +413,9 @@
             });
             const currentTotal = jetATotalGallons(liveLevels);
             totalEl.textContent = `${Math.round(currentTotal).toLocaleString()} gal`;
+
+            const totalUsable = jetATotalUsable(liveLevels);
+            document.getElementById('trendUsable').textContent = `Usable: ${totalUsable.toLocaleString()} gal`;
 
             const totalUllage = Math.round(jetATotalUllage(liveLevels));
             document.getElementById('trendUllage').textContent = `Ullage: ${totalUllage.toLocaleString()} gal available`;
