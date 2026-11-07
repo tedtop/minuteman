@@ -53,17 +53,24 @@ CREATE INDEX IF NOT EXISTS idx_fuel_density_readings_recorded
 COMMENT ON TABLE fuel_density_readings IS 'Hydrometer readings of fuel temperature and density, used to extrapolate density estimates at other temperatures.';
 
 -- Fuel load gravity QC readings (fuel farm Jet A receipts, tanks T2-T7).
--- Taken when a load arrives: hydrometer temp + reading, the GTP-3012-1A
--- wheel's correction of that reading to 60F (the figure of record, checked
--- against the driver's BOL API gravity for the +/-1.0 acceptance rule), and
--- gallons delivered so a gallon-weighted running average can stand in for
--- the "mixed" specific gravity of whatever loads have gone into T2-T7.
+-- Taken when a load arrives: hydrometer temp + reading, corrected to 60F in
+-- software (api/fuel_farm/gravity-correction.js, replicating a GTP-3012-1A
+-- conversion wheel - the figure of record, checked against the driver's BOL
+-- API gravity for the +/-1.0 acceptance rule), and gallons delivered so a
+-- gallon-weighted running average can stand in for the "mixed" specific
+-- gravity of whatever loads have gone into T2-T7.
+--
+-- Originally this stored a human's wheel reading (wheel_api_gravity_60)
+-- alongside a software cross-check (computed_api_gravity_60). The wheel step
+-- was dropped - the software correction is now the figure of record on its
+-- own - so those two columns were collapsed into corrected_api_gravity_60
+-- (non-destructive rename; the cross-check column was dropped since nothing
+-- is left to cross-check against).
 CREATE TABLE IF NOT EXISTS fuel_gravity_readings (
     id BIGSERIAL PRIMARY KEY,
     observed_temp_f DECIMAL(5,2) NOT NULL,
     observed_api_gravity DECIMAL(5,2) NOT NULL,
-    computed_api_gravity_60 DECIMAL(5,2) NOT NULL,
-    wheel_api_gravity_60 DECIMAL(5,2) NOT NULL,
+    corrected_api_gravity_60 DECIMAL(5,2) NOT NULL,
     driver_api_gravity DECIMAL(5,2) NOT NULL,
     driver_specific_gravity DECIMAL(6,4),
     gallons_delivered DECIMAL(8,2) NOT NULL CHECK (gallons_delivered > 0),
@@ -75,7 +82,7 @@ CREATE TABLE IF NOT EXISTS fuel_gravity_readings (
 CREATE INDEX IF NOT EXISTS idx_fuel_gravity_readings_recorded
     ON fuel_gravity_readings(recorded_at DESC);
 
-COMMENT ON TABLE fuel_gravity_readings IS 'Fuel load gravity QC readings for the T2-T7 Jet A farm: hydrometer temp/reading, the GTP-3012-1A wheel''s 60F correction (the figure checked against the driver''s BOL for the +/-1.0 API acceptance rule), and gallons delivered for a gallon-weighted running "mixed" gravity.';
+COMMENT ON TABLE fuel_gravity_readings IS 'Fuel load gravity QC readings for the T2-T7 Jet A farm: hydrometer temp/reading, its software-computed 60F correction (the figure checked against the driver''s BOL for the +/-1.0 API acceptance rule), and gallons delivered for a gallon-weighted running "mixed" gravity.';
 
 -- The gallon-weighted "mixed" gravity average itself (windowed to the most
 -- recent loads covering ~one T2-T7 farm volume) is computed in
@@ -148,6 +155,21 @@ CREATE TABLE IF NOT EXISTS adsb_point_cache (
 );
 
 COMMENT ON TABLE adsb_point_cache IS 'Singleton row holding the last adsb.lol point-query aircraft list around KMSO, so all clients share one upstream request per 60s cache window across serverless cold starts.';
+
+-- Durable tail number -> ICAO equipment type code, built up opportunistically
+-- from adsb_point_cache. An airframe's type never changes, so once we've seen
+-- a tail close enough to KMSO to be in the adsb.lol point query, we know its
+-- specific type (e.g. B39M, not just QT's generic "737") forever - even for
+-- tails that are currently out of range (still hours out, or parked at KMSO
+-- itself, which has no local ADS-B feeder so grounded aircraft here often
+-- don't appear in the live query at all). One row per registration ever seen.
+CREATE TABLE IF NOT EXISTS tail_equipment_cache (
+    tail_number    VARCHAR(20) PRIMARY KEY,
+    equipment_code VARCHAR(10) NOT NULL,
+    last_seen_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE tail_equipment_cache IS 'Durable tail number -> ICAO equipment type code, populated opportunistically whenever /api/flight_track sees a registration+type pair in the adsb.lol point query. Falls back to this when a requested tail is not currently within ADS-B range, since an airframe''s type is effectively permanent.';
 
 -- Materialized per-tank lowest-ever-recorded level (backs the unusable-fuel
 -- shading on the fuel farm page). An earlier draft had /api/fuel_farm/tanks

@@ -3,16 +3,15 @@
 // reading: given an observed API gravity and the fuel temperature it was
 // read at, solve for the equivalent API gravity at 60F.
 //
-// This is a software cross-check only. The GTP-3012-1A wheel reading taken
-// in the field is the number of record for the load-acceptance decision;
-// this module's output is stored alongside it for comparison/trending, not
-// as a replacement. The constants below are the "generalized refined
-// products" K0/K1/K2 set from API MPMS Chapter 11.1:2004 (the current
-// ASTM D1250 adjunct), selected by API gravity range - cross-referenced
-// against a secondary source (Wikipedia's "Volume correction factor"
-// article, which cites the 2004 standard) rather than the paid standard
-// text itself, so treat small (<0.3 API) disagreements with the wheel as
-// expected rounding/edition noise rather than a bug.
+// This is now the figure of record for the load-acceptance decision - no
+// one reads a physical wheel anymore, the hydrometer temp + reading alone
+// are enough. The constants below are the "generalized refined products"
+// K0/K1/K2 set from API MPMS Chapter 11.1:2004 (the current ASTM D1250
+// adjunct), selected by API gravity range - cross-referenced against a
+// secondary source (Wikipedia's "Volume correction factor" article, which
+// cites the 2004 standard) rather than the paid standard text itself, so a
+// small (<0.3 API) disagreement against a physical wheel, if anyone ever
+// checks one by hand again, is expected rounding/edition noise, not a bug.
 
 const WATER_DENSITY_60F_KGM3 = 999.012; // API reference density of water at 60F/0psig
 

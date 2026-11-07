@@ -80,7 +80,7 @@
             <div class="gravity-empty">No loads logged yet</div>
         </div>
         <h4>Fuel Load Gravity QC</h4>
-        <p>Jet A loads into T2&ndash;T7. Hydrometer reading + temp, then the GTP&#8209;3012&#8209;1A wheel's 60&deg;F correction &mdash; that wheel reading is checked against the driver's BOL and must be within &plusmn;1.0 API to be acceptable.</p>
+        <p>Jet A loads into T2&ndash;T7. Enter the hydrometer reading + fuel temp &mdash; the 60&deg;F correction is computed automatically and checked against the driver's BOL, which must be within &plusmn;1.0 API to be acceptable.</p>
 
         <div class="gravity-row">
             <label for="gravityObservedTemp">Observed Fuel Temp (&deg;F)</label>
@@ -89,10 +89,6 @@
         <div class="gravity-row">
             <label for="gravityObservedApi">Hydrometer Reading (&deg;API)</label>
             <input type="number" id="gravityObservedApi" step="0.1">
-        </div>
-        <div class="gravity-row">
-            <label for="gravityWheelApi60">Wheel Reading @ 60&deg;F (&deg;API)</label>
-            <input type="number" id="gravityWheelApi60" step="0.1">
         </div>
         <div class="gravity-row">
             <label for="gravityDriverApi">Driver's BOL API Gravity</label>
@@ -977,14 +973,13 @@
         async function saveGravityReading() {
             const observedTempF = parseFloat(document.getElementById('gravityObservedTemp').value);
             const observedApiGravity = parseFloat(document.getElementById('gravityObservedApi').value);
-            const wheelApiGravity60 = parseFloat(document.getElementById('gravityWheelApi60').value);
             const driverApiGravity = parseFloat(document.getElementById('gravityDriverApi').value);
             const driverSgRaw = document.getElementById('gravityDriverSg').value.trim();
             const driverSpecificGravity = driverSgRaw === '' ? null : parseFloat(driverSgRaw);
             const gallonsDelivered = parseFloat(document.getElementById('gravityGallons').value);
 
-            if ([observedTempF, observedApiGravity, wheelApiGravity60, driverApiGravity, gallonsDelivered].some(isNaN)) {
-                showError('Fill in temp, hydrometer reading, wheel reading, driver gravity, and gallons delivered');
+            if ([observedTempF, observedApiGravity, driverApiGravity, gallonsDelivered].some(isNaN)) {
+                showError('Fill in temp, hydrometer reading, driver gravity, and gallons delivered');
                 return;
             }
             if (driverSpecificGravity !== null && isNaN(driverSpecificGravity)) {
@@ -1001,7 +996,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        observedTempF, observedApiGravity, wheelApiGravity60,
+                        observedTempF, observedApiGravity,
                         driverApiGravity, driverSpecificGravity, gallonsDelivered
                     })
                 });
@@ -1013,7 +1008,7 @@
 
                 renderGravityResult(data);
 
-                ['gravityObservedTemp', 'gravityObservedApi', 'gravityWheelApi60', 'gravityDriverApi', 'gravityDriverSg', 'gravityGallons']
+                ['gravityObservedTemp', 'gravityObservedApi', 'gravityDriverApi', 'gravityDriverSg', 'gravityGallons']
                     .forEach(id => document.getElementById(id).value = '');
 
                 // Re-fetch rather than using data.average directly so the
@@ -1030,16 +1025,12 @@
 
         function renderGravityResult(data) {
             const el = document.getElementById('gravityResult');
-            const delta = Math.abs(data.reading.wheel_api_gravity_60 - data.reading.driver_api_gravity).toFixed(2);
+            const delta = Math.abs(data.reading.corrected_api_gravity_60 - data.reading.driver_api_gravity).toFixed(2);
 
             el.className = 'gravity-result ' + (data.acceptable ? 'acceptable' : 'rejected');
             el.innerHTML = data.acceptable
-                ? `&#9989; Acceptable &mdash; &Delta; ${delta}&deg; API vs. driver`
-                : `&#10060; Reject &mdash; &Delta; ${delta}&deg; API exceeds &plusmn;1.0`;
-
-            if (data.formulaMismatch) {
-                el.innerHTML += `<span class="gravity-result-note">&#9888;&#65039; Computed cross-check (${data.computedApiGravity60}&deg;) differs from the wheel reading by more than 0.3&deg; &mdash; double-check the wheel reading.</span>`;
-            }
+                ? `&#9989; Acceptable &mdash; Corrected to 60&deg;F: ${data.correctedApiGravity60}&deg; API, &Delta; ${delta}&deg; vs. driver`
+                : `&#10060; Reject &mdash; Corrected to 60&deg;F: ${data.correctedApiGravity60}&deg; API, &Delta; ${delta}&deg; exceeds &plusmn;1.0`;
 
             el.style.display = 'block';
         }

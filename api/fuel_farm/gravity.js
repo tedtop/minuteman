@@ -1,12 +1,11 @@
 // Vercel serverless function for fuel load gravity QC readings (hydrometer
-// temp + reading, GTP-3012-1A wheel correction to 60F, driver's BOL
-// comparison, and the running gallon-weighted "mixed" gravity for T2-T7).
+// temp + reading, corrected to 60F in software, driver's BOL comparison,
+// and the running gallon-weighted "mixed" gravity for T2-T7).
 const { createClient } = require('@supabase/supabase-js');
 const { correctApiGravityTo60, densityLbsGalAtTemp, apiGravityToSpecificGravity } = require('./gravity-correction');
 const { tankConfig } = require('./tanks');
 
 const ACCEPTABLE_TOLERANCE_API = 1.0;
-const FORMULA_MISMATCH_WARNING_API = 0.3; // computed-vs-wheel gap worth flagging in the UI
 
 let supabase = null;
 if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -39,7 +38,7 @@ const FETCH_LIMIT = 200; // generous cap; a handful of typical loads already cov
 async function getMixedAverage() {
     const { data, error } = await supabase
         .from('fuel_gravity_readings')
-        .select('id, wheel_api_gravity_60, gallons_delivered, recorded_at')
+        .select('id, corrected_api_gravity_60, gallons_delivered, recorded_at')
         .order('recorded_at', { ascending: false })
         .limit(FETCH_LIMIT);
 
@@ -62,12 +61,12 @@ async function getMixedAverage() {
     }
 
     const totalGallons = included.reduce((sum, r) => sum + Number(r.gallons_delivered), 0);
-    const weightedSum = included.reduce((sum, r) => sum + Number(r.wheel_api_gravity_60) * Number(r.gallons_delivered), 0);
+    const weightedSum = included.reduce((sum, r) => sum + Number(r.corrected_api_gravity_60) * Number(r.gallons_delivered), 0);
     const apiGravity60 = Math.round((weightedSum / totalGallons) * 100) / 100;
 
     console.log(`[gravity avg] window target ${WINDOW_TARGET_GALLONS.toLocaleString()} gal (T2-T7 capacity ${MIXED_FARM_CAPACITY_GALLONS.toLocaleString()} gal x${WINDOW_CAPACITY_MULTIPLIER})`);
     console.log(`[gravity avg] using ${included.length}/${data.length} fetched reading(s), ${totalGallons.toLocaleString()} gal total${data.length === FETCH_LIMIT ? ` (hit fetch cap of ${FETCH_LIMIT} - window may be truncated)` : ''}`);
-    included.forEach(r => console.log(`  - #${r.id} ${r.recorded_at} wheel_api=${r.wheel_api_gravity_60} gal=${r.gallons_delivered}`));
+    included.forEach(r => console.log(`  - #${r.id} ${r.recorded_at} corrected_api=${r.corrected_api_gravity_60} gal=${r.gallons_delivered}`));
     console.log(`[gravity avg] weighted average API gravity @60F = ${apiGravity60}`);
 
     return {
@@ -85,7 +84,7 @@ async function getMixedAverage() {
             included: included.map(r => ({
                 id: r.id,
                 recordedAt: r.recorded_at,
-                wheelApiGravity60: Number(r.wheel_api_gravity_60),
+                correctedApiGravity60: Number(r.corrected_api_gravity_60),
                 gallonsDelivered: Number(r.gallons_delivered)
             }))
         }
@@ -138,9 +137,9 @@ module.exports = async function handler(req, res) {
             return res.json({ success: true, dbConnected: true, average, recent });
 
         } else if (req.method === 'POST') {
-            const { observedTempF, observedApiGravity, wheelApiGravity60, driverApiGravity, driverSpecificGravity, gallonsDelivered } = req.body;
+            const { observedTempF, observedApiGravity, driverApiGravity, driverSpecificGravity, gallonsDelivered } = req.body;
 
-            const requiredNumbers = { observedTempF, observedApiGravity, wheelApiGravity60, driverApiGravity, gallonsDelivered };
+            const requiredNumbers = { observedTempF, observedApiGravity, driverApiGravity, gallonsDelivered };
             for (const [field, value] of Object.entries(requiredNumbers)) {
                 if (typeof value !== 'number' || Number.isNaN(value)) {
                     return res.status(400).json({ success: false, error: `${field} must be a number` });
@@ -153,17 +152,15 @@ module.exports = async function handler(req, res) {
                 return res.status(400).json({ success: false, error: 'driverSpecificGravity must be a number if provided' });
             }
 
-            const computedApiGravity60 = correctApiGravityTo60(observedApiGravity, observedTempF);
-            const acceptable = Math.abs(wheelApiGravity60 - driverApiGravity) <= ACCEPTABLE_TOLERANCE_API;
-            const formulaMismatch = Math.abs(computedApiGravity60 - wheelApiGravity60) > FORMULA_MISMATCH_WARNING_API;
+            const correctedApiGravity60 = correctApiGravityTo60(observedApiGravity, observedTempF);
+            const acceptable = Math.abs(correctedApiGravity60 - driverApiGravity) <= ACCEPTABLE_TOLERANCE_API;
 
             const { data, error } = await supabase
                 .from('fuel_gravity_readings')
                 .insert({
                     observed_temp_f: observedTempF,
                     observed_api_gravity: observedApiGravity,
-                    computed_api_gravity_60: computedApiGravity60,
-                    wheel_api_gravity_60: wheelApiGravity60,
+                    corrected_api_gravity_60: correctedApiGravity60,
                     driver_api_gravity: driverApiGravity,
                     driver_specific_gravity: driverSpecificGravity ?? null,
                     gallons_delivered: gallonsDelivered,
@@ -180,9 +177,8 @@ module.exports = async function handler(req, res) {
             return res.json({
                 success: true,
                 reading: data,
-                computedApiGravity60,
+                correctedApiGravity60,
                 acceptable,
-                formulaMismatch,
                 average
             });
 

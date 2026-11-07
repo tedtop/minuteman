@@ -300,9 +300,14 @@
         async function fetchFlightTrackData() {
             if (!currentDispatches) return;
 
+            // Not just Planned flights with an ETA to compute - also used for the
+            // live equipment code (fuel burn varies a lot within an aircraft
+            // family), which is worth showing on any status. No extra upstream
+            // cost either way: /api/flight_track makes one shared area query
+            // regardless of how many tails it's asked to filter for.
             const tails = [...new Set(
                 currentDispatches
-                    .filter(d => d.FlightStatus === 'Planned' && d.TailNumber && d.ArrivalDate)
+                    .filter(d => d.TailNumber)
                     .map(d => normalizeTail(d.TailNumber))
                     .filter(Boolean)
             )];
@@ -600,8 +605,9 @@
             let departureCountdownHtml = '';
             let timeOnGroundHtml = '';
 
+            const track = flightTrackData.get(normalizeTail(dispatch.TailNumber));
+
             if (dispatch.FlightStatus === 'Planned') {
-                const track = flightTrackData.get(normalizeTail(dispatch.TailNumber));
                 if (track && !track.onGround && track.etaMinutes != null) {
                     const etaText = `in ~${formatMinutes(Math.max(1, Math.round(track.etaMinutes)))}`;
                     const trackTitle = `ADS-B: ${Math.round(track.distanceNm)} nm out at ${Math.round(track.groundSpeedKt)} kt`
@@ -636,8 +642,14 @@
             // by Terminal+Gate together (e.g. "A4", "B2"), not the bare gate
             // number alone - matching that avoids a gate that reads ambiguous
             // or looks "wrong" next to the physical signage.
+            // adsb.lol's transponder-reported type (e.g. "B39M") is the specific
+            // variant, vs. QT's generic AircraftType ("737") - shown together
+            // when they differ so the familiar QT label doesn't just disappear.
             const aircraftSubParts = [];
-            if (dispatch.AircraftType) aircraftSubParts.push(dispatch.AircraftType);
+            const equipmentLabel = track?.equipmentCode && track.equipmentCode !== dispatch.AircraftType
+                ? `${track.equipmentCode} (${dispatch.AircraftType})`
+                : (track?.equipmentCode || dispatch.AircraftType);
+            if (equipmentLabel) aircraftSubParts.push(escapeHtml(equipmentLabel));
             if (!GATE_UNKNOWN_VALUES.has(dispatch.Gate)) {
                 const gateLabel = TERMINAL_UNKNOWN_VALUES.has(dispatch.TerminalNumber)
                     ? dispatch.Gate

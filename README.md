@@ -15,6 +15,12 @@ npm run dev                  # http://localhost:3000
 - Fuel Dispatch: http://localhost:3000/fuel_dispatch
 - Fuel Farm: http://localhost:3000/fuel_farm
 
+The `dev` script calls `vc dev`, not `vercel dev` — `vc` is the Vercel CLI's
+own short alias and does the same thing. Spelling it out the long way makes
+the CLI refuse to start (`DEV_RECURSIVE_INVOCATION`: it will not run a `dev`
+script that contains `vercel dev`, in case the script is what it was about to
+call). Leave it as `vc dev`.
+
 ## Environment Variables
 
 ```bash

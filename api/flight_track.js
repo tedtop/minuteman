@@ -61,10 +61,50 @@ async function savePointCache(aircraft, fetchedAt) {
     pointCache = { aircraft, fetchedAt };
     if (!supabase) return;
 
-    const { error } = await supabase
-        .from('adsb_point_cache')
-        .upsert({ id: 1, aircraft, fetched_at: fetchedAt.toISOString() });
-    if (error) console.error('Failed to save ADS-B point cache:', error.message);
+    // Both writes only happen once per 60s upstream fetch (not per client
+    // request), same as the point cache itself - awaited together since a
+    // detached promise can get cut off once the serverless invocation returns.
+    const [pointResult] = await Promise.all([
+        supabase.from('adsb_point_cache').upsert({ id: 1, aircraft, fetched_at: fetchedAt.toISOString() }),
+        cacheEquipmentCodes(aircraft)
+    ]);
+    if (pointResult.error) console.error('Failed to save ADS-B point cache:', pointResult.error.message);
+}
+
+// An airframe's type is effectively permanent, so every registration+type
+// pair seen in a point query is worth keeping indefinitely - this is what
+// lets a tail that's currently out of range (or parked at KMSO, which has no
+// local feeder and often doesn't appear live at all) still show its real
+// equipment type instead of falling all the way back to QT's generic one.
+async function cacheEquipmentCodes(aircraft) {
+    if (!supabase) return;
+
+    const rows = aircraft
+        .filter(ac => typeof ac.r === 'string' && typeof ac.t === 'string')
+        .map(ac => ({ tail_number: normalizeTail(ac.r), equipment_code: ac.t, last_seen_at: new Date().toISOString() }));
+    if (rows.length === 0) return;
+
+    const { error } = await supabase.from('tail_equipment_cache').upsert(rows);
+    if (error) console.error('Failed to cache equipment codes:', error.message);
+}
+
+async function getCachedEquipment(tails) {
+    if (!supabase || tails.length === 0) return {};
+
+    try {
+        const { data, error } = await supabase
+            .from('tail_equipment_cache')
+            .select('tail_number, equipment_code')
+            .in('tail_number', tails);
+        if (error) throw error;
+
+        const result = {};
+        for (const row of data || []) result[row.tail_number] = row.equipment_code;
+        return result;
+    } catch (error) {
+        console.error('Failed to load cached equipment codes:', error.message);
+        return {};
+    }
 }
 
 async function fetchPointFromAdsb() {
@@ -106,7 +146,12 @@ function summarizeAircraft(ac) {
     const etaMinutes = distanceNm != null && groundSpeedKt > MIN_ETA_GROUND_SPEED_KT
         ? (distanceNm / groundSpeedKt) * 60
         : null;
-    return { distanceNm, groundSpeedKt, altitudeFt, onGround, etaMinutes };
+    // The transponder-reported ICAO type code (e.g. "B39M", "E75L") is the
+    // specific variant, unlike QT's generic AircraftType ("737", "E75E") -
+    // useful since fuel burn differs a lot within a family (737-900 vs 737
+    // MAX 9, for instance). Not every aircraft broadcasts it.
+    const equipmentCode = typeof ac.t === 'string' ? ac.t : null;
+    return { distanceNm, groundSpeedKt, altitudeFt, onGround, etaMinutes, equipmentCode };
 }
 
 module.exports = async function handler(req, res) {
@@ -140,6 +185,21 @@ module.exports = async function handler(req, res) {
     for (const ac of point.aircraft) {
         const tail = normalizeTail(ac.r);
         if (tails.has(tail)) tracked[tail] = summarizeAircraft(ac);
+    }
+
+    // Requested tails with no live position still get their last-known
+    // equipment type, if we've ever seen one for that registration - no
+    // position/speed/ETA fields, so the client naturally skips the live
+    // countdown and just shows the type.
+    const missingTails = [...tails].filter(tail => !tracked[tail]);
+    if (missingTails.length > 0) {
+        const cachedEquipment = await getCachedEquipment(missingTails);
+        for (const [tail, equipmentCode] of Object.entries(cachedEquipment)) {
+            tracked[tail] = {
+                distanceNm: null, groundSpeedKt: null, altitudeFt: null,
+                onGround: null, etaMinutes: null, equipmentCode
+            };
+        }
     }
 
     return res.status(200).json({
