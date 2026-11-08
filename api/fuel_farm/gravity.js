@@ -137,7 +137,18 @@ module.exports = async function handler(req, res) {
             return res.json({ success: true, dbConnected: true, average, recent });
 
         } else if (req.method === 'POST') {
-            const { observedTempF, observedApiGravity, driverApiGravity, driverSpecificGravity, gallonsDelivered } = req.body;
+            const { observedTempF, observedApiGravity, driverApiGravity, driverSpecificGravity, gallonsDelivered, recordedAt } = req.body;
+
+            // Optional: the delivery's actual date/time (ISO 8601 with offset),
+            // so backfilled loads sort and window correctly. Defaults to now.
+            let recordedAtIso = new Date().toISOString();
+            if (recordedAt !== undefined && recordedAt !== null) {
+                const parsed = new Date(recordedAt);
+                if (typeof recordedAt !== 'string' || Number.isNaN(parsed.getTime()) || parsed.getTime() > Date.now() + 5 * 60 * 1000) {
+                    return res.status(400).json({ success: false, error: 'recordedAt must be a valid ISO 8601 timestamp, not in the future' });
+                }
+                recordedAtIso = parsed.toISOString();
+            }
 
             const requiredNumbers = { observedTempF, observedApiGravity, driverApiGravity, gallonsDelivered };
             for (const [field, value] of Object.entries(requiredNumbers)) {
@@ -165,7 +176,7 @@ module.exports = async function handler(req, res) {
                     driver_specific_gravity: driverSpecificGravity ?? null,
                     gallons_delivered: gallonsDelivered,
                     acceptable,
-                    recorded_at: new Date().toISOString()
+                    recorded_at: recordedAtIso
                 })
                 .select()
                 .single();
