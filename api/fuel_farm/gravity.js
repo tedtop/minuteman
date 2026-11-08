@@ -38,8 +38,8 @@ const FETCH_LIMIT = 200; // generous cap; a handful of typical loads already cov
 async function getMixedAverage() {
     const { data, error } = await supabase
         .from('fuel_gravity_readings')
-        .select('id, corrected_api_gravity_60, gallons_delivered, recorded_at')
-        .order('recorded_at', { ascending: false })
+        .select('id, corrected_api_gravity_60, gallons_delivered, created_at')
+        .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
 
     if (error) throw error;
@@ -66,7 +66,7 @@ async function getMixedAverage() {
 
     console.log(`[gravity avg] window target ${WINDOW_TARGET_GALLONS.toLocaleString()} gal (T2-T7 capacity ${MIXED_FARM_CAPACITY_GALLONS.toLocaleString()} gal x${WINDOW_CAPACITY_MULTIPLIER})`);
     console.log(`[gravity avg] using ${included.length}/${data.length} fetched reading(s), ${totalGallons.toLocaleString()} gal total${data.length === FETCH_LIMIT ? ` (hit fetch cap of ${FETCH_LIMIT} - window may be truncated)` : ''}`);
-    included.forEach(r => console.log(`  - #${r.id} ${r.recorded_at} corrected_api=${r.corrected_api_gravity_60} gal=${r.gallons_delivered}`));
+    included.forEach(r => console.log(`  - #${r.id} ${r.created_at} corrected_api=${r.corrected_api_gravity_60} gal=${r.gallons_delivered}`));
     console.log(`[gravity avg] weighted average API gravity @60F = ${apiGravity60}`);
 
     return {
@@ -83,7 +83,7 @@ async function getMixedAverage() {
             fetchedCount: data.length,
             included: included.map(r => ({
                 id: r.id,
-                recordedAt: r.recorded_at,
+                createdAt: r.created_at,
                 correctedApiGravity60: Number(r.corrected_api_gravity_60),
                 gallonsDelivered: Number(r.gallons_delivered)
             }))
@@ -95,7 +95,7 @@ async function getRecentReadings(limit) {
     const { data, error } = await supabase
         .from('fuel_gravity_readings')
         .select('*')
-        .order('recorded_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(limit);
 
     if (error) throw error;
@@ -137,17 +137,17 @@ module.exports = async function handler(req, res) {
             return res.json({ success: true, dbConnected: true, average, recent });
 
         } else if (req.method === 'POST') {
-            const { observedTempF, observedApiGravity, driverApiGravity, driverSpecificGravity, gallonsDelivered, recordedAt } = req.body;
+            const { observedTempF, observedApiGravity, driverApiGravity, driverSpecificGravity, gallonsDelivered, createdAt } = req.body;
 
             // Optional: the delivery's actual date/time (ISO 8601 with offset),
             // so backfilled loads sort and window correctly. Defaults to now.
-            let recordedAtIso = new Date().toISOString();
-            if (recordedAt !== undefined && recordedAt !== null) {
-                const parsed = new Date(recordedAt);
-                if (typeof recordedAt !== 'string' || Number.isNaN(parsed.getTime()) || parsed.getTime() > Date.now() + 5 * 60 * 1000) {
-                    return res.status(400).json({ success: false, error: 'recordedAt must be a valid ISO 8601 timestamp, not in the future' });
+            let createdAtIso = new Date().toISOString();
+            if (createdAt !== undefined && createdAt !== null) {
+                const parsed = new Date(createdAt);
+                if (typeof createdAt !== 'string' || Number.isNaN(parsed.getTime()) || parsed.getTime() > Date.now() + 5 * 60 * 1000) {
+                    return res.status(400).json({ success: false, error: 'createdAt must be a valid ISO 8601 timestamp, not in the future' });
                 }
-                recordedAtIso = parsed.toISOString();
+                createdAtIso = parsed.toISOString();
             }
 
             const requiredNumbers = { observedTempF, observedApiGravity, driverApiGravity, gallonsDelivered };
@@ -176,7 +176,7 @@ module.exports = async function handler(req, res) {
                     driver_specific_gravity: driverSpecificGravity ?? null,
                     gallons_delivered: gallonsDelivered,
                     acceptable,
-                    recorded_at: recordedAtIso
+                    created_at: createdAtIso
                 })
                 .select()
                 .single();

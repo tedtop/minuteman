@@ -75,12 +75,18 @@ CREATE TABLE IF NOT EXISTS fuel_gravity_readings (
     driver_specific_gravity DECIMAL(6,4),
     gallons_delivered DECIMAL(8,2) NOT NULL CHECK (gallons_delivered > 0),
     acceptable BOOLEAN NOT NULL,
-    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_fuel_gravity_readings_recorded
-    ON fuel_gravity_readings(recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fuel_gravity_readings_created
+    ON fuel_gravity_readings(created_at DESC);
+
+-- created_at is the load's delivery time (backfills pass createdAt to the API; otherwise now).
+-- Migration from the old recorded_at column (run once in the Supabase SQL editor):
+--   UPDATE fuel_gravity_readings SET created_at = recorded_at;
+--   ALTER TABLE fuel_gravity_readings DROP COLUMN recorded_at;
+--   DROP INDEX IF EXISTS idx_fuel_gravity_readings_recorded;
+--   CREATE INDEX IF NOT EXISTS idx_fuel_gravity_readings_created ON fuel_gravity_readings(created_at DESC);
 
 COMMENT ON TABLE fuel_gravity_readings IS 'Fuel load gravity QC readings for the T2-T7 Jet A farm: hydrometer temp/reading, its software-computed 60F correction (the figure checked against the driver''s BOL for the +/-1.0 API acceptance rule), and gallons delivered for a gallon-weighted running "mixed" gravity.';
 
