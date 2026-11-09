@@ -4,7 +4,8 @@
   "type": "commonjs",
   "description": "Minuteman Jet Center Line Dashboard",
   "scripts": {
-    "dev": "vc dev"
+    "dev": "vc dev",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.55.0"

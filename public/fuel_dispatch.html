@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="fuel_dispatch.css">
     <script src="weather-widget.js"></script>
     <script src="error-banner.js"></script>
+    <script src="wing-loading.js"></script>
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" href="/icons/icon-192.png">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -97,6 +98,7 @@
         <button class="density-save-btn" id="densitySaveBtn" onclick="saveDensityReading()">Save</button>
     </div>
 
+    <script src="wing-loading-ui.js"></script>
     <script>
         let isMonitoring = false;
         let monitoringInterval;
@@ -531,6 +533,7 @@
                 const card = createDispatchCard(dispatch);
                 container.appendChild(card);
             });
+            if (window.WingLoadingUI) window.WingLoadingUI.refresh(container);
         }
 
         // Create dispatch card
@@ -660,6 +663,11 @@
                 ? `<div class="info-sub">${aircraftSubParts.join(' &middot; ')}</div>`
                 : '';
 
+            // QT's QuantityInWeight is the planned gate fuel (the total after fueling), not an uplift.
+            const wingLoadingHtml = window.WingLoadingUI
+                ? window.WingLoadingUI.cardHtml(dispatch, track?.equipmentCode)
+                : '';
+
             card.innerHTML = `
                 <div class="flight-header">
                     <div class="flight-number">${fr24Url ? `<a class="fr24-link" href="${fr24Url}" target="_blank" rel="noopener noreferrer">${flightTitle}</a>` : flightTitle}</div>
@@ -694,6 +702,8 @@
                         ${dispatch.QuantityInWeight} lbs (${dispatch.Quantity} gal)
                     </div>
                 </div>
+
+                ${wingLoadingHtml}
 
                 ${alertsHtml}
             `;
