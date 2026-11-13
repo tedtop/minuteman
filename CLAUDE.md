@@ -52,12 +52,17 @@ enriched by `/api/flight_track` using adsb.lol — chosen over airplanes.live
 (the real API is a separate paid product from the personal subscription
 already in use).
 
-The specific ICAO equipment type (e.g. `B39M`) comes from adsbdb
-(`api.adsbdb.com/v0/aircraft/<tail>`, same source as fbo-manager), looked up
-per dispatched tail and cached in memory (24h hit / 1h miss) in
-`/api/flight_track`. It is a registration database, so it answers for parked
-or out-of-range tails; when it has nothing the card keeps QT's generic
-`AircraftType`. There is deliberately no equipment table in Supabase.
+The specific ICAO equipment type (e.g. `B39M`) is looked up per dispatched tail
+in `/api/flight_track` and cached in memory (24h hit / 1h miss): first adsbdb
+(`api.adsbdb.com/v0/aircraft/<tail>`, same source as fbo-manager), then, for US
+tails adsbdb doesn't know, the FAA registry (`api/_faa.js`), whose
+manufacturer/model strings are mapped to a designator with the
+`icao-aircraft-types` package (ICAO Doc 8643; sources at `~/src/icao-aircraft-types`,
+vendored here as `vendor/*.tgz` until it is on npm - rebuild the tarball and
+reinstall after changing the package). When both come up empty the card keeps
+QT's generic `AircraftType`. Flightradar24 was ruled out: it sits behind a
+Cloudflare challenge. There is deliberately no equipment table in Supabase.
+Tests: `npm test` (`test/faa.test.js`).
 
 adsb.lol is free, keyless and has no SLA, and the page polls every 30s from
 several clients at once, so the endpoint makes one shared 250nm point-query

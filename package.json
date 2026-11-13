@@ -4,10 +4,12 @@
   "type": "commonjs",
   "description": "Minuteman Jet Center Line Dashboard",
   "scripts": {
-    "dev": "vc dev"
+    "dev": "vc dev",
+    "test": "node --test"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.55.0"
+    "@supabase/supabase-js": "^2.55.0",
+    "icao-aircraft-types": "file:vendor/icao-aircraft-types-0.1.0.tgz"
   },
   "keywords": [
     "fuel",

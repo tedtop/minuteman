@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { lookupFaaDesignator } = require('./_faa');
 
 let supabase = null;
 if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -67,46 +68,61 @@ async function savePointCache(aircraft, fetchedAt) {
     if (error) console.error('Failed to save ADS-B point cache:', error.message);
 }
 
-// Specific ICAO equipment type (e.g. "B39M", "E75L") per registration from
-// adsbdb, the same source fbo-manager uses. QT's own AircraftType is generic
-// ("737", "E75E") - the specific variant matters since fuel burn differs a lot
-// within a family. adsbdb is a static registration database, so unlike the
-// live ADS-B feed it answers for tails that are parked or still hours out. No
-// fallback here: when adsbdb has nothing the client just keeps QT's type.
+// Specific ICAO equipment type (e.g. "B39M", "E75L") per registration. QT's
+// own AircraftType is generic ("737", "E75E") - the specific variant matters
+// since fuel burn differs a lot within a family. Source order:
+//   1. adsbdb (same as fbo-manager) - a registration database, so it answers
+//      for tails that are parked or still hours out, unlike the live feed.
+//   2. FAA registry for US tails adsbdb doesn't know (api/_faa.js, mapped to a
+//      designator via the icao-aircraft-types package).
+// No further fallback here: when both come up empty the client just keeps
+// QT's own type.
 const ADSBDB_URL = 'https://api.adsbdb.com/v0/aircraft';
 const ADSBDB_TIMEOUT_MS = 5000;
 const EQUIPMENT_HIT_TTL_MS = 24 * 60 * 60 * 1000; // an airframe's type effectively never changes
 const EQUIPMENT_MISS_TTL_MS = 60 * 60 * 1000;
 const equipmentCache = new Map(); // tail -> { code: string|null, expiresAt: number }
 
-// Returns the ICAO type code, or null when adsbdb doesn't know the tail or
-// can't be reached. Failures (network/5xx) aren't cached so they get retried;
-// a clean "unknown" answer is cached for a shorter time than a hit.
-async function lookupEquipment(tail) {
-    const cached = equipmentCache.get(tail);
-    if (cached && cached.expiresAt > Date.now()) return cached.code;
-
+// ICAO type code, null (adsbdb answered but doesn't know the tail), or
+// undefined (couldn't be reached - don't cache, so it gets retried).
+async function lookupAdsbdb(tail) {
     try {
         const response = await fetch(`${ADSBDB_URL}/${encodeURIComponent(tail)}`, {
             headers: { 'Accept': 'application/json' },
             signal: AbortSignal.timeout(ADSBDB_TIMEOUT_MS)
         });
         // adsbdb answers 404 for a tail it doesn't know - a real, cacheable "no".
-        if (!response.ok && response.status !== 404) return null;
-
-        const body = response.ok ? await response.json() : null;
-        const code = typeof body?.response?.aircraft?.icao_type === 'string'
-            ? body.response.aircraft.icao_type.trim().toUpperCase() || null
-            : null;
-        equipmentCache.set(tail, {
-            code,
-            expiresAt: Date.now() + (code ? EQUIPMENT_HIT_TTL_MS : EQUIPMENT_MISS_TTL_MS)
-        });
-        return code;
+        if (response.status === 404) return null;
+        if (!response.ok) return undefined;
+        const body = await response.json();
+        const code = body?.response?.aircraft?.icao_type;
+        return typeof code === 'string' && code.trim() ? code.trim().toUpperCase() : null;
     } catch (error) {
         console.error(`adsbdb lookup failed for ${tail}:`, error.message);
-        return null;
+        return undefined;
     }
+}
+
+async function lookupEquipment(tail) {
+    const cached = equipmentCache.get(tail);
+    if (cached && cached.expiresAt > Date.now()) return cached.code;
+
+    let code = await lookupAdsbdb(tail);
+    let definitive = code !== undefined;
+    if (!code) {
+        const faa = await lookupFaaDesignator(tail);
+        if (faa) code = faa;
+        // A miss is only cacheable if every source we asked actually answered.
+        definitive = definitive && faa !== undefined;
+    }
+
+    if (definitive) {
+        equipmentCache.set(tail, {
+            code: code || null,
+            expiresAt: Date.now() + (code ? EQUIPMENT_HIT_TTL_MS : EQUIPMENT_MISS_TTL_MS)
+        });
+    }
+    return code || null;
 }
 
 async function fetchPointFromAdsb() {
