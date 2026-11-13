@@ -61,49 +61,51 @@ async function savePointCache(aircraft, fetchedAt) {
     pointCache = { aircraft, fetchedAt };
     if (!supabase) return;
 
-    // Both writes only happen once per 60s upstream fetch (not per client
-    // request), same as the point cache itself - awaited together since a
-    // detached promise can get cut off once the serverless invocation returns.
-    const [pointResult] = await Promise.all([
-        supabase.from('adsb_point_cache').upsert({ id: 1, aircraft, fetched_at: fetchedAt.toISOString() }),
-        cacheEquipmentCodes(aircraft)
-    ]);
-    if (pointResult.error) console.error('Failed to save ADS-B point cache:', pointResult.error.message);
+    const { error } = await supabase
+        .from('adsb_point_cache')
+        .upsert({ id: 1, aircraft, fetched_at: fetchedAt.toISOString() });
+    if (error) console.error('Failed to save ADS-B point cache:', error.message);
 }
 
-// An airframe's type is effectively permanent, so every registration+type
-// pair seen in a point query is worth keeping indefinitely - this is what
-// lets a tail that's currently out of range (or parked at KMSO, which has no
-// local feeder and often doesn't appear live at all) still show its real
-// equipment type instead of falling all the way back to QT's generic one.
-async function cacheEquipmentCodes(aircraft) {
-    if (!supabase) return;
+// Specific ICAO equipment type (e.g. "B39M", "E75L") per registration from
+// adsbdb, the same source fbo-manager uses. QT's own AircraftType is generic
+// ("737", "E75E") - the specific variant matters since fuel burn differs a lot
+// within a family. adsbdb is a static registration database, so unlike the
+// live ADS-B feed it answers for tails that are parked or still hours out. No
+// fallback here: when adsbdb has nothing the client just keeps QT's type.
+const ADSBDB_URL = 'https://api.adsbdb.com/v0/aircraft';
+const ADSBDB_TIMEOUT_MS = 5000;
+const EQUIPMENT_HIT_TTL_MS = 24 * 60 * 60 * 1000; // an airframe's type effectively never changes
+const EQUIPMENT_MISS_TTL_MS = 60 * 60 * 1000;
+const equipmentCache = new Map(); // tail -> { code: string|null, expiresAt: number }
 
-    const rows = aircraft
-        .filter(ac => typeof ac.r === 'string' && typeof ac.t === 'string')
-        .map(ac => ({ tail_number: normalizeTail(ac.r), equipment_code: ac.t, last_seen_at: new Date().toISOString() }));
-    if (rows.length === 0) return;
-
-    const { error } = await supabase.from('tail_equipment_cache').upsert(rows);
-    if (error) console.error('Failed to cache equipment codes:', error.message);
-}
-
-async function getCachedEquipment(tails) {
-    if (!supabase || tails.length === 0) return {};
+// Returns the ICAO type code, or null when adsbdb doesn't know the tail or
+// can't be reached. Failures (network/5xx) aren't cached so they get retried;
+// a clean "unknown" answer is cached for a shorter time than a hit.
+async function lookupEquipment(tail) {
+    const cached = equipmentCache.get(tail);
+    if (cached && cached.expiresAt > Date.now()) return cached.code;
 
     try {
-        const { data, error } = await supabase
-            .from('tail_equipment_cache')
-            .select('tail_number, equipment_code')
-            .in('tail_number', tails);
-        if (error) throw error;
+        const response = await fetch(`${ADSBDB_URL}/${encodeURIComponent(tail)}`, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(ADSBDB_TIMEOUT_MS)
+        });
+        // adsbdb answers 404 for a tail it doesn't know - a real, cacheable "no".
+        if (!response.ok && response.status !== 404) return null;
 
-        const result = {};
-        for (const row of data || []) result[row.tail_number] = row.equipment_code;
-        return result;
+        const body = response.ok ? await response.json() : null;
+        const code = typeof body?.response?.aircraft?.icao_type === 'string'
+            ? body.response.aircraft.icao_type.trim().toUpperCase() || null
+            : null;
+        equipmentCache.set(tail, {
+            code,
+            expiresAt: Date.now() + (code ? EQUIPMENT_HIT_TTL_MS : EQUIPMENT_MISS_TTL_MS)
+        });
+        return code;
     } catch (error) {
-        console.error('Failed to load cached equipment codes:', error.message);
-        return {};
+        console.error(`adsbdb lookup failed for ${tail}:`, error.message);
+        return null;
     }
 }
 
@@ -146,12 +148,7 @@ function summarizeAircraft(ac) {
     const etaMinutes = distanceNm != null && groundSpeedKt > MIN_ETA_GROUND_SPEED_KT
         ? (distanceNm / groundSpeedKt) * 60
         : null;
-    // The transponder-reported ICAO type code (e.g. "B39M", "E75L") is the
-    // specific variant, unlike QT's generic AircraftType ("737", "E75E") -
-    // useful since fuel burn differs a lot within a family (737-900 vs 737
-    // MAX 9, for instance). Not every aircraft broadcasts it.
-    const equipmentCode = typeof ac.t === 'string' ? ac.t : null;
-    return { distanceNm, groundSpeedKt, altitudeFt, onGround, etaMinutes, equipmentCode };
+    return { distanceNm, groundSpeedKt, altitudeFt, onGround, etaMinutes };
 }
 
 module.exports = async function handler(req, res) {
@@ -174,37 +171,32 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ tracked: {}, fetchedAt: null, stale: false });
     }
 
-    // Non-critical enrichment: any failure degrades to an empty result rather
-    // than an error, so the client just falls back to QT's own times.
-    const point = await getPointData();
-    if (!point) {
-        return res.status(200).json({ tracked: {}, fetchedAt: null, stale: false });
-    }
-
+    // Non-critical enrichment: any failure degrades to less data rather than an
+    // error, so the client just falls back to QT's own times and type.
     const tracked = {};
-    for (const ac of point.aircraft) {
-        const tail = normalizeTail(ac.r);
-        if (tails.has(tail)) tracked[tail] = summarizeAircraft(ac);
-    }
-
-    // Requested tails with no live position still get their last-known
-    // equipment type, if we've ever seen one for that registration - no
-    // position/speed/ETA fields, so the client naturally skips the live
-    // countdown and just shows the type.
-    const missingTails = [...tails].filter(tail => !tracked[tail]);
-    if (missingTails.length > 0) {
-        const cachedEquipment = await getCachedEquipment(missingTails);
-        for (const [tail, equipmentCode] of Object.entries(cachedEquipment)) {
-            tracked[tail] = {
-                distanceNm: null, groundSpeedKt: null, altitudeFt: null,
-                onGround: null, etaMinutes: null, equipmentCode
-            };
+    const point = await getPointData();
+    if (point) {
+        for (const ac of point.aircraft) {
+            const tail = normalizeTail(ac.r);
+            if (tails.has(tail)) tracked[tail] = summarizeAircraft(ac);
         }
     }
 
+    // Equipment type for every requested tail, in range or not. A tail with no
+    // live position gets an entry with null position fields, so the client
+    // skips the countdown and just shows the type.
+    const tailList = [...tails];
+    const codes = await Promise.all(tailList.map(lookupEquipment));
+    tailList.forEach((tail, i) => {
+        if (!codes[i]) return;
+        tracked[tail] = tracked[tail]
+            ? { ...tracked[tail], equipmentCode: codes[i] }
+            : { distanceNm: null, groundSpeedKt: null, altitudeFt: null, onGround: null, etaMinutes: null, equipmentCode: codes[i] };
+    });
+
     return res.status(200).json({
         tracked,
-        fetchedAt: point.fetchedAt.toISOString(),
-        stale: point.stale
+        fetchedAt: point ? point.fetchedAt.toISOString() : null,
+        stale: point ? point.stale : false
     });
 };

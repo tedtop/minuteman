@@ -162,21 +162,6 @@ CREATE TABLE IF NOT EXISTS adsb_point_cache (
 
 COMMENT ON TABLE adsb_point_cache IS 'Singleton row holding the last adsb.lol point-query aircraft list around KMSO, so all clients share one upstream request per 60s cache window across serverless cold starts.';
 
--- Durable tail number -> ICAO equipment type code, built up opportunistically
--- from adsb_point_cache. An airframe's type never changes, so once we've seen
--- a tail close enough to KMSO to be in the adsb.lol point query, we know its
--- specific type (e.g. B39M, not just QT's generic "737") forever - even for
--- tails that are currently out of range (still hours out, or parked at KMSO
--- itself, which has no local ADS-B feeder so grounded aircraft here often
--- don't appear in the live query at all). One row per registration ever seen.
-CREATE TABLE IF NOT EXISTS tail_equipment_cache (
-    tail_number    VARCHAR(20) PRIMARY KEY,
-    equipment_code VARCHAR(10) NOT NULL,
-    last_seen_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-COMMENT ON TABLE tail_equipment_cache IS 'Durable tail number -> ICAO equipment type code, populated opportunistically whenever /api/flight_track sees a registration+type pair in the adsb.lol point query. Falls back to this when a requested tail is not currently within ADS-B range, since an airframe''s type is effectively permanent.';
-
 -- Materialized per-tank lowest-ever-recorded level (backs the unusable-fuel
 -- shading on the fuel farm page). An earlier draft had /api/fuel_farm/tanks
 -- call a get_min_tank_readings() RPC (a full table scan + GROUP BY/MIN) on
