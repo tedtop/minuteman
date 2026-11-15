@@ -86,5 +86,3 @@ out/
 
 # Vercel
 .vercel
-# Vendored internal package (see CLAUDE.md, ICAO equipment lookup)
-!vendor/*.tgz

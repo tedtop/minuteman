@@ -57,9 +57,8 @@ in `/api/flight_track` and cached in memory (24h hit / 1h miss): first adsbdb
 (`api.adsbdb.com/v0/aircraft/<tail>`, same source as fbo-manager), then, for US
 tails adsbdb doesn't know, the FAA registry (`api/_faa.js`), whose
 manufacturer/model strings are mapped to a designator with the
-`icao-aircraft-types` package (ICAO Doc 8643; sources at `~/src/icao-aircraft-types`,
-vendored here as `vendor/*.tgz` until it is on npm - rebuild the tarball and
-reinstall after changing the package). When both come up empty the card keeps
+`icao-aircraft-types` package (ICAO Doc 8643; on npm, sources at
+`github.com/tedtop/icao-aircraft-types`). When both come up empty the card keeps
 QT's generic `AircraftType`. Flightradar24 was ruled out: it sits behind a
 Cloudflare challenge. There is deliberately no equipment table in Supabase.
 Tests: `npm test` (`test/faa.test.js`).

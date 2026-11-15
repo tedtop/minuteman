@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.55.0",
-    "icao-aircraft-types": "file:vendor/icao-aircraft-types-0.1.0.tgz"
+    "icao-aircraft-types": "^1.1.0"
   },
   "keywords": [
     "fuel",
