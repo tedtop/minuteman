@@ -561,6 +561,9 @@
             const fr24Url = dispatch.TailNumber
                 ? `https://www.flightradar24.com/data/aircraft/${dispatch.TailNumber.toLowerCase()}`
                 : null;
+            const fr24FlightUrl = dispatch.FlightNumber
+                ? `https://www.flightradar24.com/data/flights/${encodeURIComponent(String(dispatch.FlightNumber).replace(/\s+/g, '').toLowerCase())}`
+                : null;
             const flightTitle = `${dispatch.FlightNumber} to ${dispatch.Destination}`;
             const tailNumberDisplay = dispatch.TailNumber || '';
 
@@ -662,7 +665,7 @@
 
             card.innerHTML = `
                 <div class="flight-header">
-                    <div class="flight-number">${fr24Url ? `<a class="fr24-link" href="${fr24Url}" target="_blank" rel="noopener noreferrer">${flightTitle}</a>` : flightTitle}</div>
+                    <div class="flight-number">${fr24FlightUrl ? `<a class="fr24-link" href="${fr24FlightUrl}" target="_blank" rel="noopener noreferrer">${flightTitle}</a>` : flightTitle}</div>
                     <div class="flight-status ${statusClass}">${dispatch.FlightStatus}</div>
                 </div>
 
