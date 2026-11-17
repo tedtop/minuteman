@@ -519,27 +519,66 @@ input:checked+.toggle-slider:before {
     }
 }
 
-/* Wing loading summary on each card + the shared Fuel sheet dialog */
-.wing-loading {
+/* Wing split in the green fuel box (L / center / R) with 50 lb per-wing arrows */
+.wl-fuel {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-top: 10px;
-    padding: 6px 10px;
-    border: 1px solid rgba(102, 126, 234, 0.3);
-    border-radius: 8px;
-    background: rgba(102, 126, 234, 0.06);
-    font-size: 12px;
-    font-weight: 600;
-    color: #2c3e50;
+    justify-content: center;
+    gap: 4px 8px;
 }
 
-.wing-loading-split {
-    margin-left: 6px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-weight: 400;
-    color: #7f8c8d;
+.wl-split-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.wl-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid rgba(39, 174, 96, 0.5);
+    border-radius: 8px;
+    background: #fff;
+    color: #27ae60;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.wl-step:hover:not(:disabled) {
+    background: #27ae60;
+    color: #fff;
+}
+
+.wl-step:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+@media (max-width: 400px) {
+    .wl-fuel {
+        font-size: 16px;
+    }
+
+    .wl-step {
+        min-width: 32px;
+        height: 32px;
+    }
+}
+
+/* "Fuel sheet" button under each card + the shared Fuel sheet dialog */
+.wing-loading {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
 }
 
 .wing-loading-btn {

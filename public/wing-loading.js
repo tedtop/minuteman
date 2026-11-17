@@ -8,11 +8,14 @@
     // Wing numbers are the MAI ramp placard (May 2025). Center tanks are published figures at 6.7 lbs/gal
     // except where marked verified: confirm each against a real fuel sheet and correct it here.
     // wingLbs: max per wing tank, lbs (summer). wingWinterLbs: winter max where it differs.
+    // defaultWingLbs: the wing figure the line actually loads to, all year, where that differs from the
+    // placard (737s: 8650, the ramp's choice over 8600 summer / 8800 winter). It sets the card split and
+    // the Fuel sheet's default wing max; the placard stays the hard limit for overflow.
     // centerLbs: 0 = no center tank; undefined = unknown (no overflow check). verified: confirmed from the
     // ramp placard or a real fuel sheet. match: tested against the type upper-cased, spaces/dashes removed.
     const AIRCRAFT_FUEL_TYPES = [
-        { key: 'b737max9', label: 'B737 MAX 9', match: /^(B?7?39M|737MAX9|B?7M9|B39M|7379M)/, wingLbs: 8600, wingWinterLbs: 8800, centerLbs: 28800, verified: false },
-        { key: 'b737ng', label: 'B737-800/900', match: /^(B?73[789]|737)/, wingLbs: 8600, wingWinterLbs: 8800, centerLbs: 28800, verified: false },
+        { key: 'b737max9', label: 'B737 MAX 9', match: /^(B?7?39M|737MAX9|B?7M9|B39M|7379M)/, wingLbs: 8600, wingWinterLbs: 8800, defaultWingLbs: 8650, centerLbs: 28800, verified: false },
+        { key: 'b737ng', label: 'B737-800/900', match: /^(B?73[789]|737)/, wingLbs: 8600, wingWinterLbs: 8800, defaultWingLbs: 8650, centerLbs: 28800, verified: false },
         { key: 'a320', label: 'A319/A320', match: /^(A?3(19|20)|A32[01])/, wingLbs: 14000, verified: false },
         { key: 'e175', label: 'E175', match: /^(E?175|E75)/, wingLbs: 10390, centerLbs: 0, verified: true },
         { key: 'crj200', label: 'CRJ200', match: /^(CRJ2|CL?60|CRJ200)/, wingLbs: 4488, centerLbs: 4930, verified: true },
@@ -21,6 +24,7 @@
 
     const DEFAULT_DENSITY = 6.79;
     const SHEET_TOLERANCE_GAL = 75;
+    const WING_STEP_LBS = 50;
 
     const normalise = (type) => type.toUpperCase().replace(/[\s\-_/]/g, '');
     const round = (n) => Math.round(n);
@@ -32,16 +36,78 @@
         return AIRCRAFT_FUEL_TYPES.find((entry) => entry.match.test(t));
     }
 
+    // The placard wing max for the season.
+    function placardWingLbs(capacity, winter) {
+        return winter && capacity.wingWinterLbs ? capacity.wingWinterLbs : capacity.wingLbs;
+    }
+
+    // Hard ceiling for one wing: the placard, or the chosen default figure where that is higher
+    // (8650 on a 737 sits above the 8600 summer placard by the ramp's own choice).
+    function hardWingMaxLbs(capacity, winter) {
+        return Math.max(placardWingLbs(capacity, winter), capacity.defaultWingLbs || 0);
+    }
+
+    // The wing figure a card starts from before anyone adjusts it.
+    function defaultWingLbs(capacity, winter) {
+        return capacity.defaultWingLbs ?? placardWingLbs(capacity, winter);
+    }
+
+    // Range the per-wing figure may take for a planned total, with center = planned - 2 x wing:
+    // wing >= 0, wing <= the hard wing max, center >= 0 (wing <= planned/2) and, where the center tank's
+    // size is known, center <= centerLbs (wing >= (planned - centerLbs) / 2). When the request cannot fit at
+    // all, min collapses onto max so the wings stay full.
+    function wingBounds(capacity, plannedLbs, winter) {
+        const half = Math.max(0, plannedLbs) / 2;
+        const max = Math.min(hardWingMaxLbs(capacity, winter), half);
+        if (capacity.centerLbs === 0) return { min: max, max };
+        const min = capacity.centerLbs === undefined ? 0 : Math.max(0, half - capacity.centerLbs / 2);
+        return { min: Math.min(min, max), max };
+    }
+
+    function clampWing(capacity, plannedLbs, wingLbs, winter) {
+        const { min, max } = wingBounds(capacity, plannedLbs, winter);
+        const w = Number.isFinite(wingLbs) ? wingLbs : defaultWingLbs(capacity, winter);
+        return Math.min(max, Math.max(min, w));
+    }
+
+    // One press of the card's arrow buttons: direction -1 / +1, step lbs per wing, clamped.
+    function stepWing(capacity, plannedLbs, wingLbs, direction, winter, step = WING_STEP_LBS) {
+        const current = clampWing(capacity, plannedLbs, wingLbs, winter);
+        return clampWing(capacity, plannedLbs, current + Math.sign(direction) * step, winter);
+    }
+
+    // The card's L / center / R figures for a planned total and an (optional) adjusted wing figure.
+    // Whole pounds: the wing is floored and the center takes the remainder, so the three always add up.
+    function cardSplit(capacity, plannedLbs, wingLbs, winter) {
+        const hasCenter = capacity.centerLbs !== 0;
+        const { min, max } = wingBounds(capacity, plannedLbs, winter);
+        const wing = Math.floor(clampWing(capacity, plannedLbs, wingLbs, winter));
+        const center = hasCenter ? Math.max(0, Math.round(plannedLbs - 2 * wing)) : 0;
+        return {
+            left: wing,
+            center,
+            right: wing,
+            wing,
+            hasCenter,
+            adjustable: hasCenter && max - min >= 1,
+            canDecrease: hasCenter && wing > Math.ceil(min),
+            canIncrease: hasCenter && wing < Math.floor(max)
+        };
+    }
+
     // input: { capacity, before?: {left,center,right}, plannedLbs, winter?, wingMaxLbs?, density? }
     function planWingLoad(input) {
         const density = input.density && input.density > 0 ? input.density : DEFAULT_DENSITY;
         const capacity = input.capacity;
         const b = input.before || {};
         const before = { left: b.left ?? 0, center: b.center ?? 0, right: b.right ?? 0 };
-        const wingMax =
-            input.wingMaxLbs ?? (input.winter && capacity.wingWinterLbs ? capacity.wingWinterLbs : capacity.wingLbs);
+        const wingMax = input.wingMaxLbs ?? placardWingLbs(capacity, input.winter);
         const hasCenter = capacity.centerLbs !== 0;
         const warnings = [];
+        const hardMax = hardWingMaxLbs(capacity, input.winter);
+        if (wingMax > hardMax) {
+            warnings.push(`Wing max ${round(wingMax).toLocaleString()} is over the ${hardMax.toLocaleString()} lb wing limit`);
+        }
 
         const beforeTotal = before.left + before.center + before.right;
         const totalAfter = Math.max(input.plannedLbs, beforeTotal);
@@ -93,7 +159,11 @@
         return { difference, withinTolerance: Math.abs(difference) <= tolerance, tolerance };
     }
 
-    const api = { AIRCRAFT_FUEL_TYPES, DEFAULT_DENSITY, SHEET_TOLERANCE_GAL, findFuelType, planWingLoad, truckCheck };
+    const api = {
+        AIRCRAFT_FUEL_TYPES, DEFAULT_DENSITY, SHEET_TOLERANCE_GAL, WING_STEP_LBS,
+        findFuelType, placardWingLbs, hardWingMaxLbs, defaultWingLbs, wingBounds, clampWing, stepWing, cardSplit,
+        planWingLoad, truckCheck
+    };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.WingLoading = api;
 })(typeof window !== 'undefined' ? window : globalThis);

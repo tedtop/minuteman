@@ -664,9 +664,14 @@
                 : '';
 
             // QT's QuantityInWeight is the planned gate fuel (the total after fueling), not an uplift.
+            // For types with a tank table the green box shows the L / center / R split instead of gallons.
             const wingLoadingHtml = window.WingLoadingUI
                 ? window.WingLoadingUI.cardHtml(dispatch, track?.equipmentCode)
                 : '';
+            const fuelBoxHtml = (window.WingLoadingUI && window.WingLoadingUI.fuelBoxHtml(dispatch, track?.equipmentCode))
+                || `<div class="fuel-quantity">
+                        ${dispatch.QuantityInWeight} lbs (${dispatch.Quantity} gal)
+                    </div>`;
 
             card.innerHTML = `
                 <div class="flight-header">
@@ -698,9 +703,7 @@
                 </div>
 
                 <div class="fuel-info">
-                    <div class="fuel-quantity">
-                        ${dispatch.QuantityInWeight} lbs (${dispatch.Quantity} gal)
-                    </div>
+                    ${fuelBoxHtml}
                 </div>
 
                 ${wingLoadingHtml}

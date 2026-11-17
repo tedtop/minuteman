@@ -1,6 +1,8 @@
-// "Fuel sheet" dialog for the dispatch cards: the airline's routine fuel service form, worked out for the
-// fueler. Type what each tank holds on arrival and every line to write on the sheet is filled in. Nothing
-// is stored. Mirrors fbo-manager's wing-loading-panel.tsx.
+// Wing loading on the dispatch cards. The green fuel box shows the planned gate fuel split L wing /
+// center / R wing, with arrows that move the per-wing figure in 50 lb steps (the adjusted figure is kept
+// per flight in this browser's localStorage, nothing else). The "Fuel sheet" dialog is the airline's
+// routine fuel service form, worked out for the fueler: type what each tank holds on arrival and every
+// line to write on the sheet is filled in. Mirrors fbo-manager's wing-loading-panel.tsx.
 //
 // The dispatch cards are rebuilt on every poll, so the dialog is one shared element outside them: its
 // inputs survive a refresh, and an open dialog picks up a changed planned gate fuel from QT.
@@ -31,25 +33,109 @@
         return WL.findFuelType(equipmentCode) || WL.findFuelType(aircraftType);
     }
 
-    function summaryHtml(fuelType, plannedLbs) {
-        const r = WL.planWingLoad({ capacity: fuelType, plannedLbs, winter: isWinter() });
-        const parts = TANKS.filter((t) => t.key !== 'center' || r.hasCenter)
-            .map((t) => `${t.label[0]} ${fmt(r.after[t.key])}`);
-        return `Wing loading <span class="wing-loading-split">${parts.join(' &middot; ')} lbs</span>`;
+    // Adjusted per-wing figures, per flight, in this browser only. { [id]: { wing, t } }; entries older
+    // than three days are dropped on write. Every access is guarded: storage can be missing or throw.
+    const STORE_KEY = 'wingLoad.adjustedWing.v1';
+    const STORE_MAX_AGE_MS = 3 * 24 * 3600 * 1000;
+
+    function readStore() {
+        try {
+            const v = JSON.parse(window.localStorage.getItem(STORE_KEY) || '{}');
+            return v && typeof v === 'object' ? v : {};
+        } catch (e) {
+            return {};
+        }
     }
 
-    // The summary line + button appended to a dispatch card; '' for types we have no tank table for.
-    function cardHtml(dispatch, equipmentCode) {
-        const fuelType = fuelTypeFor(dispatch.AircraftType, equipmentCode);
-        const plannedLbs = Number(dispatch.QuantityInWeight);
-        if (!fuelType || !(plannedLbs > 0)) return '';
+    function storedWing(id) {
+        if (!id) return undefined;
+        const entry = readStore()[id];
+        const n = entry && Number(entry.wing);
+        return Number.isFinite(n) ? n : undefined;
+    }
+
+    function saveWing(id, wing) {
+        if (!id) return;
+        try {
+            const store = readStore();
+            const now = Date.now();
+            for (const k of Object.keys(store)) {
+                if (!store[k] || !(now - store[k].t < STORE_MAX_AGE_MS)) delete store[k];
+            }
+            store[id] = { wing, t: now };
+            window.localStorage.setItem(STORE_KEY, JSON.stringify(store));
+        } catch (e) {
+            // Storage unavailable (private mode, blocked): the adjustment just lasts until the next poll.
+        }
+    }
+
+    const typeByKey = (key) => WL.AIRCRAFT_FUEL_TYPES.find((t) => t.key === key);
+
+    // Inner HTML of the green fuel box for a known type: "18400 lbs ◀ (8650/1100/8650) ▶".
+    function fuelBoxInner(fuelType, plannedLbs, id) {
+        const s = WL.cardSplit(fuelType, plannedLbs, storedWing(id), isWinter());
+        const split = s.hasCenter ? `${s.left}/${s.center}/${s.right}` : `${s.left}/${s.right}`;
+        const label = s.hasCenter ? 'L wing / center / R wing, lbs' : 'L wing / R wing, lbs';
+        const arrow = (dir, ch, enabled, what) => s.adjustable
+            ? `<button type="button" class="wl-step" data-wl-step="${dir}" ${enabled ? '' : 'disabled'}
+                       aria-label="${what} per wing (${WL.WING_STEP_LBS} lbs)">${ch}</button>`
+            : '';
+        return `<span class="wl-planned">${plannedLbs} lbs</span>
+                <span class="wl-split-group">
+                    ${arrow(-1, '&#9664;', s.canDecrease, 'Less')}
+                    <span class="wl-split" title="${label}">(${split})</span>
+                    ${arrow(1, '&#9654;', s.canIncrease, 'More')}
+                </span>`;
+    }
+
+    const ctxAttrs = (dispatch, fuelType, plannedLbs) => {
         const id = dispatch.FlightID || dispatch.TransactionID || '';
         const title = [dispatch.FlightNumber, dispatch.TailNumber].filter(Boolean).join(' ');
-        return `<div class="wing-loading" data-wl-id="${esc(id)}" data-wl-type="${fuelType.key}"
-                     data-wl-planned="${plannedLbs}" data-wl-title="${esc(title)}">
-                    <span class="wing-loading-summary">${summaryHtml(fuelType, plannedLbs)}</span>
+        return { id, title, attrs: `data-wl-id="${esc(id)}" data-wl-type="${fuelType.key}" data-wl-planned="${plannedLbs}" data-wl-title="${esc(title)}"` };
+    };
+
+    function known(dispatch, equipmentCode) {
+        const fuelType = fuelTypeFor(dispatch.AircraftType, equipmentCode);
+        const plannedLbs = Number(dispatch.QuantityInWeight);
+        return fuelType && plannedLbs > 0 ? { fuelType, plannedLbs } : null;
+    }
+
+    // The green fuel box with the wing split, or null for types we have no tank table for (the card then
+    // keeps its plain "lbs (gal)" box).
+    function fuelBoxHtml(dispatch, equipmentCode) {
+        const k = known(dispatch, equipmentCode);
+        if (!k) return null;
+        const { id, attrs } = ctxAttrs(dispatch, k.fuelType, k.plannedLbs);
+        return `<div class="fuel-quantity wl-fuel" ${attrs}>${fuelBoxInner(k.fuelType, k.plannedLbs, id)}</div>`;
+    }
+
+    // The "Fuel sheet" button row under the fuel box; '' for types we have no tank table for.
+    function cardHtml(dispatch, equipmentCode) {
+        const k = known(dispatch, equipmentCode);
+        if (!k) return '';
+        const { attrs } = ctxAttrs(dispatch, k.fuelType, k.plannedLbs);
+        return `<div class="wing-loading" ${attrs}>
                     <button type="button" class="wing-loading-btn">&#129518; Fuel sheet</button>
                 </div>`;
+    }
+
+    // The card's current wing figure (stored adjustment or default, clamped) for a .wl-fuel / .wing-loading element.
+    function currentWing(el) {
+        const fuelType = typeByKey(el.dataset.wlType);
+        return WL.cardSplit(fuelType, Number(el.dataset.wlPlanned), storedWing(el.dataset.wlId), isWinter()).wing;
+    }
+
+    function step(btn) {
+        const box = btn.closest('.wl-fuel');
+        const fuelType = typeByKey(box.dataset.wlType);
+        const planned = Number(box.dataset.wlPlanned);
+        const winter = isWinter();
+        const id = box.dataset.wlId;
+        const next = WL.stepWing(fuelType, planned, storedWing(id), Number(btn.dataset.wlStep), winter);
+        saveWing(id, next);
+        box.innerHTML = fuelBoxInner(fuelType, planned, id);
+        const again = box.querySelector(`.wl-step[data-wl-step="${btn.dataset.wlStep}"]`);
+        if (again && !again.disabled) again.focus();
     }
 
     function buildDialog() {
@@ -111,7 +197,7 @@
         const winter = isWinter();
         $('wlTitle').textContent = 'Fuel sheet' + (ctx.title ? ': ' + ctx.title : '');
         $('wlType').value = fuelType.key;
-        $('wlWingMax').placeholder = String(winter && fuelType.wingWinterLbs ? fuelType.wingWinterLbs : fuelType.wingLbs);
+        $('wlWingMax').placeholder = String(WL.defaultWingLbs(fuelType, winter));
 
         const beforeIn = {};
         dlg.querySelectorAll('.wl-before').forEach((el) => { beforeIn[el.dataset.tank] = num(el.value); });
@@ -120,7 +206,7 @@
             plannedLbs: ctx.plannedLbs,
             winter,
             density: num($('wlDensity').value),
-            wingMaxLbs: num($('wlWingMax').value),
+            wingMaxLbs: num($('wlWingMax').value) ?? WL.defaultWingLbs(fuelType, winter),
             before: beforeIn
         });
 
@@ -166,6 +252,8 @@
         }
         ctx.plannedLbs = Number(el.dataset.wlPlanned);
         ctx.title = el.dataset.wlTitle;
+        // Open on the card's current (possibly adjusted) wing figure as the wing max.
+        dlg.querySelector('#wlWingMax').value = String(currentWing(el));
         dlg.style.display = 'flex';
         render();
     }
@@ -179,10 +267,16 @@
         if (el) { ctx.plannedLbs = Number(el.dataset.wlPlanned); render(); }
     }
 
-    document.addEventListener('click', (e) => {
-        const btn = e.target.closest('.wing-loading-btn');
-        if (btn) open(btn.closest('.wing-loading'));
-    });
+    // One delegated listener on the dispatch container: the cards inside are rebuilt on every poll.
+    const container = document.getElementById('dispatchContainer');
+    if (container) {
+        container.addEventListener('click', (e) => {
+            const stepBtn = e.target.closest('.wl-step');
+            if (stepBtn) { if (!stepBtn.disabled) step(stepBtn); return; }
+            const btn = e.target.closest('.wing-loading-btn');
+            if (btn) open(btn.closest('.wing-loading'));
+        });
+    }
 
-    window.WingLoadingUI = { cardHtml, refresh };
+    window.WingLoadingUI = { fuelBoxHtml, cardHtml, refresh };
 })();
