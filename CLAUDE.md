@@ -71,6 +71,19 @@ back to stale cache or an empty result on failure. When a tail isn't in ADS-B
 range (most of a flight's transit), the card just shows QT's own time with no
 `live` badge.
 
+## Dispatch Change Log (added November 2026)
+
+QT changes to a flight (fuel, gate, arrival, departure, tail swap) are
+detected server-side in `api/_dispatch_changes.js`: each `/api/dispatch` poll
+diffs against `dispatch_snapshots` and appends to `dispatch_changes`
+(Supabase, see `schema/supabase-schema.sql`), returning the log as `_changes`.
+Cards show a ⚠ marker on the changed box for as long as the flight is in the
+feed (hover, or tap on touch screens, lists every change). Changes that arrive
+while the page is open also get a banner, which a refresh clears. MEL is QT's
+current state, so its banner always shows. If the tables are missing or
+Supabase fails, `_changes` is `null` and the page falls back to diffing polls
+in memory (the old behaviour, lost on refresh).
+
 ## Fuel Farm Enhancements (TODO)
 - **Enhanced Tank Level Visual Indicators**: color-code the tank fill zones —
   red for unusable fuel areas (below usable minimum), yellow for

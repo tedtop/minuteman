@@ -32,7 +32,7 @@ displayDispatchData(currentDispatches);
 
 // ---------------------------------------------------------------------
 // 3. Single fuel/gate/time change - simulates a "before" poll then an
-//    "after" poll so detectDispatchChanges() has something to diff.
+//    "after" poll so updateDispatchChanges() has something to diff.
 // ---------------------------------------------------------------------
 
 const baseline = {
@@ -42,7 +42,7 @@ const baseline = {
   DepartureDate: "2026-07-05 14:37", ArrivalDate: "2026-07-05 16:10",
   QuantityInWeight: 20000, Quantity: 2985, Gate: "B2", MEL: false, MELMessage: null
 };
-detectDispatchChanges([baseline]);
+updateDispatchChanges([baseline], null);
 
 const updated = {
   ...baseline,
@@ -51,7 +51,7 @@ const updated = {
   Gate: "C4",
   DepartureDate: "2026-07-05 15:10"
 };
-detectDispatchChanges([updated]);
+updateDispatchChanges([updated], null);
 
 currentDispatches = [updated, ...currentDispatches];
 displayDispatchData(currentDispatches);
@@ -61,7 +61,7 @@ displayDispatchData(currentDispatches);
 // 4. Every combination in one shot - five cards: MEL only, fuel-only,
 //    gate-only, multiple stacked time changes, and everything at once.
 //
-//    detectDispatchChanges() prunes any flight missing from the array
+//    updateDispatchChanges() prunes any flight missing from the array
 //    it's given - that's correct for real polls (fetchDispatchData
 //    always passes QT's full current dispatch list), but it means this
 //    demo must call it the same way: once per simulated poll, with the
@@ -97,24 +97,24 @@ let fuel = makeBaseline({ FlightID: 'demo-fuel', FlightNumber: 'AA1002' });
 let gate = makeBaseline({ FlightID: 'demo-gate', FlightNumber: 'AA1003' });
 let time = makeBaseline({ FlightID: 'demo-time', FlightNumber: 'AA1004' });
 let all = makeBaseline({ FlightID: 'demo-all', FlightNumber: 'AA1005' });
-detectDispatchChanges([melOnly, fuel, gate, time, all]);
+updateDispatchChanges([melOnly, fuel, gate, time, all], null);
 
 // Poll 2 - fuel/gate/time each change once; "all" starts changing too.
 fuel = { ...fuel, QuantityInWeight: 23000, Quantity: 3432 };
 gate = { ...gate, Gate: 'C4' };
 time = { ...time, DepartureDate: '2026-07-05 14:50' };
 all = { ...all, QuantityInWeight: 24500, Quantity: 3656, Gate: 'D1', DepartureDate: '2026-07-05 15:00' };
-detectDispatchChanges([melOnly, fuel, gate, time, all]);
+updateDispatchChanges([melOnly, fuel, gate, time, all], null);
 
 // Poll 3 - "time" slips again; "all" picks up its MEL and slips too.
 time = { ...time, DepartureDate: '2026-07-05 15:10' };
 all = { ...all, DepartureDate: '2026-07-05 15:20', MEL: true,
   MELMessage: 'REMARKS\nMEL ITEMS\nMEL 0626D  3076C10   28-03A        L WING PMP LOWPSI LT28 03A' };
-detectDispatchChanges([melOnly, fuel, gate, time, all]);
+updateDispatchChanges([melOnly, fuel, gate, time, all], null);
 
 // Poll 4 - "time" slips a third time, so its card shows 3 stacked lines.
 time = { ...time, DepartureDate: '2026-07-05 15:35' };
-detectDispatchChanges([melOnly, fuel, gate, time, all]);
+updateDispatchChanges([melOnly, fuel, gate, time, all], null);
 
 currentDispatches = [melOnly, fuel, gate, time, all];
 displayDispatchData(currentDispatches);

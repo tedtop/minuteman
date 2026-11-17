@@ -518,3 +518,105 @@ input:checked+.toggle-slider:before {
         padding: 15px;
     }
 }
+
+/* Change markers: a ⚠ on the box whose value QT changed (arrival, departure,
+   gate, fuel, tail). Hover lists every change of that kind on the flight; a
+   tap pins it open (touch screens have no hover). The popover anchors to the
+   whole box, not the tiny icon, so it has room to read. */
+.info-item,
+.fuel-info {
+    position: relative;
+}
+
+.change-marker {
+    display: inline-block;
+    margin-left: 4px;
+    vertical-align: baseline;
+}
+
+.change-marker-btn {
+    border: none;
+    background: none;
+    padding: 0 2px;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1;
+    color: #e67e22;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.change-marker-btn:hover,
+.change-marker.open .change-marker-btn {
+    color: #c0392b;
+}
+
+.change-popover {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: max-content;
+    max-width: calc(100vw - 48px);
+    z-index: 20;
+    background: #fff;
+    border: 1px solid rgba(230, 126, 34, 0.5);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 8px 10px;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 12px;
+    font-weight: 500;
+    color: #2c3e50;
+    white-space: normal;
+}
+
+/* Right-hand boxes open leftward so the list stays on the card. */
+.flight-info .info-item:nth-child(even) .change-popover {
+    left: auto;
+    right: 0;
+}
+
+.change-popover-title {
+    display: block;
+    font-weight: 700;
+    color: #9a5215;
+    margin-bottom: 4px;
+}
+
+.change-popover ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.change-popover li {
+    padding: 2px 0;
+    white-space: nowrap;
+}
+
+.change-when {
+    display: inline-block;
+    min-width: 64px;
+    color: #888;
+    margin-right: 6px;
+}
+
+.change-marker.open .change-popover {
+    display: block;
+}
+
+@media (hover: hover) {
+    .change-marker:hover .change-popover {
+        display: block;
+    }
+}
+
+/* Lift the card with an open list above its neighbours. */
+.dispatch-card:has(.change-marker.open),
+.dispatch-card:has(.change-marker:hover) {
+    position: relative;
+    z-index: 10;
+}

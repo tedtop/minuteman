@@ -75,7 +75,7 @@ test('with no cached session QT is called without a Cookie; success is passed th
     const calls = scriptFetch(t, [jsonResponse(GOOD)]);
     const res = await post(loadModule(t, 'dispatch.js'));
     assert.equal(res.statusCode, 200);
-    assert.deepEqual(res.body, { ...GOOD, _proxyDiagnostics: { sessionRefreshed: false } });
+    assert.deepEqual(res.body, { ...GOOD, _proxyDiagnostics: { sessionRefreshed: false }, _changes: null });
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, DETAIL_URL);
     assert.equal(calls[0].options.method, 'POST');

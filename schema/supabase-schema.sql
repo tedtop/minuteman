@@ -209,3 +209,38 @@ ORDER BY tank_id, level ASC, recorded_at ASC
 ON CONFLICT (tank_id) DO UPDATE
     SET level = EXCLUDED.level, recorded_at = EXCLUDED.recorded_at
     WHERE EXCLUDED.level < tank_level_min.level;
+
+-- QT dispatch change log for /api/dispatch (api/_dispatch_changes.js).
+-- dispatch_snapshots holds the last values seen per flight; each poll diffs
+-- against it and appends fuel/gate/arrival/departure/tail changes to
+-- dispatch_changes, so the dispatch cards can flag a change after a page
+-- refresh and on every screen. Several clients poll at once, so the unique
+-- index turns a second client's insert of the same transition into a no-op.
+-- flight_key is the page's key for a flight: FlightID, else TransactionID.
+CREATE TABLE IF NOT EXISTS dispatch_snapshots (
+    flight_key TEXT PRIMARY KEY,
+    fuel       TEXT,
+    gate       TEXT,
+    arrival    TEXT,
+    departure  TEXT,
+    tail       TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS dispatch_changes (
+    id          BIGSERIAL PRIMARY KEY,
+    flight_key  TEXT NOT NULL,
+    kind        TEXT NOT NULL CHECK (kind IN ('fuel', 'gate', 'arrival', 'departure', 'tail')),
+    old_value   TEXT NOT NULL,
+    new_value   TEXT NOT NULL,
+    detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dispatch_changes_transition
+    ON dispatch_changes (flight_key, kind, old_value, new_value);
+
+CREATE INDEX IF NOT EXISTS idx_dispatch_changes_flight
+    ON dispatch_changes (flight_key, detected_at);
+
+COMMENT ON TABLE dispatch_snapshots IS 'Last fuel/gate/arrival/departure/tail values seen per QT flight, diffed on each /api/dispatch poll.';
+COMMENT ON TABLE dispatch_changes IS 'QT dispatch changes per flight (fuel, gate, arrival, departure, tail), shown as change markers on the dispatch cards.';

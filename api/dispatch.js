@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { trackDispatchChanges } = require('./_dispatch_changes');
 
 let supabase = null;
 if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -310,6 +311,13 @@ module.exports = async function handler(req, res) {
 
         recordDispatchHistory(data?.Detail?.Dispatches)
             .catch(e => console.error('dispatch history async error:', e));
+
+        // Persisted fuel/gate/time/tail changes per flight, so the page can
+        // flag them after a refresh. null = no change log available; the
+        // page then falls back to diffing polls in memory.
+        if (data?.Success) {
+            data._changes = await trackDispatchChanges(supabase, data?.Detail?.Dispatches);
+        }
 
         return res.json(data);
 

@@ -109,9 +109,20 @@
         // Dispatch change tracking - flags fuel/gate/time changes between polls
         // so they're easily noticed on an always-on office display, keyed by
         // FlightID since QT issues a new TransactionID on every edit.
-        let previousDispatchSnapshots = new Map(); // FlightID -> {QuantityInWeight, Gate, DepartureDate, ArrivalDate}
-        let dispatchChanges = new Map(); // FlightID -> {fuel: [...], gate: [...], time: [...]} - every transition kept, oldest first
-        const CHANGE_RETENTION_MS = 3 * 60 * 60 * 1000; // stop flagging a change after 3 hours
+        // Change log per flight (FlightID, else TransactionID) -> [{kind, oldValue, newValue, detectedAt}],
+        // oldest first; kind is fuel | gate | arrival | departure | tail. Normally the server's persisted
+        // log (/api/dispatch _changes), so it survives a refresh; diffed in memory here only when the
+        // server has no log to give (no database).
+        let dispatchChanges = new Map();
+        let previousDispatchSnapshots = new Map(); // in-memory fallback only
+        let localChangeLog = new Map();            // in-memory fallback only
+        // Changes that arrived while this page was open (not in its first poll) also get a banner,
+        // keyed by flight|kind|old|new -> first seen (ms). Older ones show only as card markers.
+        let liveChangeFirstSeen = new Map();
+        let changeBaselineTaken = false;
+        let changeLogSource = null;
+        let openChangeMarker = null; // "flightKey|kind" of the tapped-open marker, kept across re-renders
+        const CHANGE_RETENTION_MS = 3 * 60 * 60 * 1000; // live banners stop after 3 hours; markers stay
         const GATE_UNKNOWN_VALUES = new Set([null, undefined, '', '?']);
         // "-", "?" and "0" are QT's placeholder TerminalNumber values for gates
         // that aren't inside a lettered concourse (see the Terminals reference
@@ -399,7 +410,7 @@
                 if (data.Success) {
                     const newDispatches = data.Detail.Dispatches;
 
-                    detectDispatchChanges(newDispatches);
+                    updateDispatchChanges(newDispatches, data._changes);
                     currentDispatches = newDispatches;
 
                     displayDispatchData(currentDispatches);
@@ -431,74 +442,133 @@
             renderErrorBanner(message, true);
         }
 
-        // Compare the latest poll against the previous one and record any
-        // fuel/gate/time changes per flight, so cards can flag them even
-        // though the next poll's snapshot will otherwise look "unchanged".
-        function detectDispatchChanges(dispatches) {
+        // Gate as the ramp reads it (terminal + gate, "A4"), or null when QT has none.
+        function gateLabelOf(dispatch) {
+            if (GATE_UNKNOWN_VALUES.has(dispatch.Gate)) return null;
+            return TERMINAL_UNKNOWN_VALUES.has(dispatch.TerminalNumber)
+                ? String(dispatch.Gate)
+                : `${dispatch.TerminalNumber}${dispatch.Gate}`;
+        }
+
+        const CHANGE_KINDS = ['fuel', 'gate', 'arrival', 'departure', 'tail'];
+
+        // Same fields and rules as api/_dispatch_changes.js, for the in-memory fallback.
+        function changeSnapshotOf(dispatch) {
+            const fuel = Number(dispatch.QuantityInWeight);
+            const date = v => (v && !isQtNullDate(v) ? String(v) : null);
+            return {
+                fuel: Number.isFinite(fuel) && fuel > 0 ? String(fuel) : null,
+                gate: gateLabelOf(dispatch),
+                arrival: date(dispatch.ArrivalDate),
+                departure: date(dispatch.DepartureDate),
+                tail: dispatch.TailNumber ? String(dispatch.TailNumber).trim().toUpperCase() || null : null
+            };
+        }
+
+        // Fallback when the server has no change log: diff this poll against the last one in memory.
+        // Changes seen this way are lost on refresh.
+        function diffDispatchesLocally(dispatches) {
             const now = Date.now();
-            const dispatchesByKey = new Map();
-            dispatches.forEach(d => {
-                const key = d.FlightID || d.TransactionID;
-                if (key) dispatchesByKey.set(key, d);
+            const keys = new Set();
+            dispatches.forEach(dispatch => {
+                const key = dispatch.FlightID || dispatch.TransactionID;
+                if (!key) return;
+                keys.add(String(key));
+                const next = changeSnapshotOf(dispatch);
+                const prev = previousDispatchSnapshots.get(String(key));
+                if (prev) {
+                    for (const k of CHANGE_KINDS) {
+                        if (next[k] == null) next[k] = prev[k]; // keep the last known value through a blank
+                        if (prev[k] != null && next[k] != null && prev[k] !== next[k]) {
+                            const list = localChangeLog.get(String(key)) || [];
+                            list.push({ kind: k, oldValue: prev[k], newValue: next[k], detectedAt: now });
+                            localChangeLog.set(String(key), list);
+                        }
+                    }
+                }
+                previousDispatchSnapshots.set(String(key), next);
             });
+            for (const key of [...localChangeLog.keys()]) if (!keys.has(key)) localChangeLog.delete(key);
+            return localChangeLog;
+        }
 
-            dispatchesByKey.forEach((dispatch, key) => {
-                const prev = previousDispatchSnapshots.get(key);
-                previousDispatchSnapshots.set(key, {
-                    QuantityInWeight: dispatch.QuantityInWeight,
-                    Gate: dispatch.Gate,
-                    DepartureDate: dispatch.DepartureDate,
-                    ArrivalDate: dispatch.ArrivalDate
-                });
-
-                if (!prev) return; // first time seeing this flight - nothing to diff against
-
-                const changes = dispatchChanges.get(key) || { fuel: [], gate: [], time: [] };
-
-                if (prev.QuantityInWeight > 0 && dispatch.QuantityInWeight !== prev.QuantityInWeight) {
-                    changes.fuel.push({
-                        oldValue: prev.QuantityInWeight,
-                        newValue: dispatch.QuantityInWeight,
-                        increased: dispatch.QuantityInWeight > prev.QuantityInWeight,
-                        detectedAt: now
-                    });
+        // Takes this poll's change log (the server's, else the in-memory fallback) and notes which
+        // changes are new since the page loaded, for the live banners.
+        function updateDispatchChanges(dispatches, serverChanges) {
+            const now = Date.now();
+            const log = new Map();
+            // Switching source (server log <-> in-memory) re-takes the baseline, so a server log that
+            // shows up mid-session doesn't turn its whole history into live banners.
+            const source = serverChanges && typeof serverChanges === 'object' ? 'server' : 'local';
+            if (source !== changeLogSource) changeBaselineTaken = false;
+            changeLogSource = source;
+            if (source === 'server') {
+                for (const [key, list] of Object.entries(serverChanges)) {
+                    log.set(key, (list || []).map(c => ({ ...c, detectedAt: Date.parse(c.detectedAt) || now })));
                 }
+            } else {
+                for (const [key, list] of diffDispatchesLocally(dispatches)) log.set(key, list);
+            }
 
-                if (!GATE_UNKNOWN_VALUES.has(prev.Gate) && !GATE_UNKNOWN_VALUES.has(dispatch.Gate) && dispatch.Gate !== prev.Gate) {
-                    changes.gate.push({ oldValue: prev.Gate, newValue: dispatch.Gate, detectedAt: now });
-                }
-
-                if (prev.DepartureDate && dispatch.DepartureDate && dispatch.DepartureDate !== prev.DepartureDate) {
-                    changes.time.push({ label: 'Departure', oldValue: prev.DepartureDate, newValue: dispatch.DepartureDate, detectedAt: now });
-                } else if (prev.ArrivalDate && dispatch.ArrivalDate && dispatch.ArrivalDate !== prev.ArrivalDate) {
-                    changes.time.push({ label: 'Arrival', oldValue: prev.ArrivalDate, newValue: dispatch.ArrivalDate, detectedAt: now });
-                }
-
-                if (changes.fuel.length || changes.gate.length || changes.time.length) {
-                    dispatchChanges.set(key, changes);
-                }
-            });
-
-            // Stop flagging a flight once it's departed or drops out of the
-            // feed entirely; individually age out transitions past retention
-            // so a card doesn't accumulate change lines forever.
-            for (const key of [...dispatchChanges.keys()]) {
-                const dispatch = dispatchesByKey.get(key);
-                if (!dispatch || dispatch.FlightStatus === 'Completed') {
-                    dispatchChanges.delete(key);
-                    continue;
-                }
-
-                const changes = dispatchChanges.get(key);
-                changes.fuel = changes.fuel.filter(c => now - c.detectedAt <= CHANGE_RETENTION_MS);
-                changes.gate = changes.gate.filter(c => now - c.detectedAt <= CHANGE_RETENTION_MS);
-                changes.time = changes.time.filter(c => now - c.detectedAt <= CHANGE_RETENTION_MS);
-
-                if (!changes.fuel.length && !changes.gate.length && !changes.time.length) {
-                    dispatchChanges.delete(key);
+            for (const [key, list] of log) {
+                for (const c of list) {
+                    const id = `${key}|${c.kind}|${c.oldValue}|${c.newValue}`;
+                    if (!liveChangeFirstSeen.has(id)) {
+                        // Already on record at the first poll: marker only, no banner.
+                        liveChangeFirstSeen.set(id, changeBaselineTaken ? now : null);
+                    }
                 }
             }
+            changeBaselineTaken = true;
+            dispatchChanges = log;
         }
+
+        // Changes that arrived while this page was open, within CHANGE_RETENTION_MS: these get a banner.
+        function liveChangesFor(key, list) {
+            const now = Date.now();
+            return list.filter(c => {
+                const seen = liveChangeFirstSeen.get(`${key}|${c.kind}|${c.oldValue}|${c.newValue}`);
+                return seen != null && now - seen <= CHANGE_RETENTION_MS;
+            });
+        }
+
+        const CHANGE_LABELS = { fuel: 'Fuel', gate: 'Gate', arrival: 'Arrival', departure: 'Departure', tail: 'Tail' };
+
+        function formatChangeValue(kind, value) {
+            if (kind === 'fuel') return `${formatLbs(Number(value))} lbs`;
+            if (kind === 'arrival' || kind === 'departure') return formatTimeOnly(value);
+            return value;
+        }
+
+        // ⚠ marker for one kind of change on a card box; hover (or tap) lists every change of that
+        // kind on this flight, oldest first, with when it was noticed.
+        function changeMarkerHtml(key, list, kind) {
+            const items = (list || []).filter(c => c.kind === kind);
+            if (!items.length) return '';
+            const markerId = `${key}|${kind}`;
+            const rows = items.map(c => `<li><span class="change-when">${escapeHtml(formatClockTime(c.detectedAt))}</span>`
+                + `${escapeHtml(formatChangeValue(kind, c.oldValue))} &rarr; ${escapeHtml(formatChangeValue(kind, c.newValue))}</li>`).join('');
+            const label = `${CHANGE_LABELS[kind]} changed ${items.length === 1 ? 'once' : items.length + ' times'}`;
+            return `<span class="change-marker${openChangeMarker === markerId ? ' open' : ''}" data-marker="${escapeHtml(markerId)}">`
+                + `<button type="button" class="change-marker-btn" aria-label="${label}" title="${label}">&#9888;&#xFE0E;</button>`
+                + `<span class="change-popover" role="tooltip"><span class="change-popover-title">${label}</span><ul>${rows}</ul></span>`
+                + `</span>`;
+        }
+
+        function formatClockTime(ms) {
+            return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Tap a marker to pin its list open (touch screens have no hover); tap anywhere else to close.
+        // Cards are rebuilt every poll, so the open marker is remembered and re-applied on render.
+        document.addEventListener('click', function (event) {
+            const marker = event.target.closest && event.target.closest('.change-marker');
+            const id = marker ? marker.dataset.marker : null;
+            openChangeMarker = id && openChangeMarker !== id ? id : null;
+            document.querySelectorAll('.change-marker').forEach(m => {
+                m.classList.toggle('open', m.dataset.marker === openChangeMarker);
+            });
+        });
 
         // Display dispatch data
         function displayDispatchData(dispatches) {
@@ -549,10 +619,16 @@
                 card.classList.add('mel');
             }
 
-            const changeKey = dispatch.FlightID || dispatch.TransactionID;
-            const changes = changeKey ? dispatchChanges.get(changeKey) : null;
+            // Every recorded change shows as a ⚠ marker on its box (arrival, departure, gate, fuel,
+            // tail) for as long as the flight is in the feed, refresh or not. Changes that arrived
+            // while this page was open also get a banner, which a refresh clears. MEL is current
+            // state from QT, so its banner always shows.
+            const changeKey = String(dispatch.FlightID || dispatch.TransactionID || '');
+            const changeList = (changeKey && dispatchChanges.get(changeKey)) || [];
+            const liveChanges = liveChangesFor(changeKey, changeList);
+            const marker = kind => changeMarkerHtml(changeKey, changeList, kind);
 
-            if (changes) {
+            if (liveChanges.length) {
                 card.classList.add('has-change');
             }
 
@@ -575,27 +651,18 @@
                    </div>`);
             }
 
-            if (changes?.fuel?.length) {
-                const text = changes.fuel.map(c => {
-                    const verb = c.increased ? 'increased' : 'decreased';
-                    return `Fuel ${verb}: ${formatLbs(c.oldValue)} → ${formatLbs(c.newValue)} lbs`;
+            const BANNER_ICONS = { fuel: '⛽', gate: '🚪', arrival: '🕐', departure: '🕐', tail: '✈️' };
+            for (const kind of CHANGE_KINDS) {
+                const items = liveChanges.filter(c => c.kind === kind);
+                if (!items.length) continue;
+                const text = items.map(c => {
+                    const verb = kind === 'fuel'
+                        ? (Number(c.newValue) > Number(c.oldValue) ? 'increased' : 'decreased')
+                        : 'changed';
+                    return `${CHANGE_LABELS[kind]} ${verb}: ${formatChangeValue(kind, c.oldValue)} → ${formatChangeValue(kind, c.newValue)}`;
                 }).join('\n');
                 alertBlocks.push(`<div class="dispatch-banner">
-                        <span class="dispatch-banner-icon">⛽</span>
-                        <span class="dispatch-banner-text">${escapeHtml(text)}</span>
-                   </div>`);
-            }
-            if (changes?.gate?.length) {
-                const text = changes.gate.map(c => `Gate changed: ${c.oldValue} → ${c.newValue}`).join('\n');
-                alertBlocks.push(`<div class="dispatch-banner">
-                        <span class="dispatch-banner-icon">🚪</span>
-                        <span class="dispatch-banner-text">${escapeHtml(text)}</span>
-                   </div>`);
-            }
-            if (changes?.time?.length) {
-                const text = changes.time.map(c => `${c.label} changed: ${formatTimeOnly(c.oldValue)} → ${formatTimeOnly(c.newValue)}`).join('\n');
-                alertBlocks.push(`<div class="dispatch-banner">
-                        <span class="dispatch-banner-icon">🕐</span>
+                        <span class="dispatch-banner-icon">${BANNER_ICONS[kind]}</span>
                         <span class="dispatch-banner-text">${escapeHtml(text)}</span>
                    </div>`);
             }
@@ -657,7 +724,7 @@
                 const gateLabel = TERMINAL_UNKNOWN_VALUES.has(dispatch.TerminalNumber)
                     ? dispatch.Gate
                     : `${dispatch.TerminalNumber}${dispatch.Gate}`;
-                aircraftSubParts.push(`Gate ${escapeHtml(gateLabel)}`);
+                aircraftSubParts.push(`Gate ${escapeHtml(gateLabel)}${marker('gate')}`);
             }
             const aircraftSubtext = aircraftSubParts.length
                 ? `<div class="info-sub">${aircraftSubParts.join(' &middot; ')}</div>`
@@ -671,7 +738,7 @@
 
                 <div class="flight-info">
                     <div class="info-item">
-                        <div class="info-label">Tail Number</div>
+                        <div class="info-label">Tail Number${marker('tail')}</div>
                         <div class="info-value">${fr24Url ? `<a class="fr24-link" href="${fr24Url}" target="_blank" rel="noopener noreferrer">${tailNumberDisplay}</a>` : tailNumberDisplay}</div>
                         ${aircraftSubtext}
                     </div>
@@ -680,12 +747,12 @@
                         <div class="info-value airline-value">${dispatch.AirlineName}</div>
                     </div>
                     <div class="info-item">
-                        <div class="info-label">Arrival</div>
+                        <div class="info-label">Arrival${marker('arrival')}</div>
                         <div class="info-value">${formatDateTime(dispatch.ArrivalDate)}</div>
                         ${arrivalCountdownHtml}
                     </div>
                     <div class="info-item">
-                        <div class="info-label">Departure</div>
+                        <div class="info-label">Departure${marker('departure')}</div>
                         <div class="info-value">${formatDateTime(dispatch.DepartureDate)}</div>
                         ${departureCountdownHtml}
                     </div>
@@ -694,7 +761,7 @@
 
                 <div class="fuel-info">
                     <div class="fuel-quantity">
-                        ${dispatch.QuantityInWeight} lbs (${dispatch.Quantity} gal)
+                        ${dispatch.QuantityInWeight} lbs (${dispatch.Quantity} gal)${marker('fuel')}
                     </div>
                 </div>
 
