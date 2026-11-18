@@ -739,9 +739,11 @@
             const wingLoadingHtml = window.WingLoadingUI
                 ? window.WingLoadingUI.cardHtml(dispatch, track?.equipmentCode)
                 : '';
+            // Before QT has a fuel request the box reads just "0 lbs": "(0 gal)" next to it read like a
+            // wing split. Gallons stay for requested fuel on types without a tank table.
             const fuelBoxHtml = (window.WingLoadingUI && window.WingLoadingUI.fuelBoxHtml(dispatch, track?.equipmentCode))
                 || `<div class="fuel-quantity">
-                        ${dispatch.QuantityInWeight} lbs (${dispatch.Quantity} gal)
+                        ${dispatch.QuantityInWeight} lbs${Number(dispatch.QuantityInWeight) > 0 ? ` (${dispatch.Quantity} gal)` : ''}
                     </div>`;
 
             card.innerHTML = `
