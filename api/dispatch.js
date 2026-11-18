@@ -1,5 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
-const { trackDispatchChanges } = require('./_dispatch_changes');
+const { recordDispatches, changesFromVersions } = require('./_dispatch_history');
 
 let supabase = null;
 if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -193,37 +193,6 @@ async function callGetDispatchDetail(companyLocationId, userId, cookie) {
     return response;
 }
 
-function parseQtDate(str) {
-    if (!str) return null;
-    return new Date(str.replace(' ', 'T') + ':00').toISOString();
-}
-
-async function recordDispatchHistory(dispatches) {
-    if (!supabase || !dispatches?.length) return;
-
-    const rows = dispatches.map(d => ({
-        transaction_id:        d.TransactionID,
-        change_flags:          d.ChangeFlags ?? 0,
-        flight_number:         d.FlightNumber        || null,
-        tail_number:           d.TailNumber          || null,
-        aircraft_type:         d.AircraftType        || null,
-        airline_icao_code:     d.AirlineIcaoCode     || null,
-        destination:           d.Destination         || null,
-        quantity:              d.Quantity            ?? null,
-        quantity_in_weight:    d.QuantityInWeight     ?? null,
-        density:               d.Density             ?? null,
-        transaction_status_id: d.TransactionStatusID ?? null,
-        arrival_date:          parseQtDate(d.ArrivalDate),
-        departure_date:        parseQtDate(d.DepartureDate),
-    }));
-
-    const { error } = await supabase
-        .from('fuel_dispatch_history')
-        .upsert(rows, { onConflict: 'transaction_id,change_flags', ignoreDuplicates: true });
-
-    if (error) console.error('fuel_dispatch_history write error:', error.message);
-}
-
 module.exports = async function handler(req, res) {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -309,14 +278,13 @@ module.exports = async function handler(req, res) {
             data._proxyDiagnostics = { sessionRefreshed: false };
         }
 
-        recordDispatchHistory(data?.Detail?.Dispatches)
-            .catch(e => console.error('dispatch history async error:', e));
-
-        // Persisted fuel/gate/time/tail changes per flight, so the page can
-        // flag them after a refresh. null = no change log available; the
-        // page then falls back to diffing polls in memory.
+        // Every poll is recorded in fuel_dispatch_history (one row per version
+        // of a flight); the changes between versions come back as _changes so
+        // the page can flag them after a refresh. null = no history available,
+        // and the page falls back to diffing polls in memory.
         if (data?.Success) {
-            data._changes = await trackDispatchChanges(supabase, data?.Detail?.Dispatches);
+            const versions = await recordDispatches(supabase, data?.Detail?.Dispatches);
+            data._changes = versions ? changesFromVersions(versions) : null;
         }
 
         return res.json(data);

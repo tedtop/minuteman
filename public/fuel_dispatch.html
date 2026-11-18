@@ -452,7 +452,7 @@
 
         const CHANGE_KINDS = ['fuel', 'gate', 'arrival', 'departure', 'tail'];
 
-        // Same fields and rules as api/_dispatch_changes.js, for the in-memory fallback.
+        // Same change rules as api/_dispatch_history.js, for the in-memory fallback.
         function changeSnapshotOf(dispatch) {
             const fuel = Number(dispatch.QuantityInWeight);
             const date = v => (v && !isQtNullDate(v) ? String(v) : null);

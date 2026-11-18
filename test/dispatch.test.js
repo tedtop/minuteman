@@ -14,7 +14,6 @@ const LIST_URL = 'https://go.qttechnologies.com/Portal/Dispatch/ListDispatch?vie
 const DETAIL_URL = 'https://go.qttechnologies.com/Portal/Dispatch/GetDispatchDetail';
 
 const GOOD = { Success: true, Detail: { Dispatches: [] } };
-const flush = () => new Promise(resolve => setImmediate(resolve));
 const post = (handler, body = BODY) => invoke(handler, { method: 'POST', body });
 
 // QT answers GetDispatchDetail with HTTP 200 + {"message":"Unauthorized"} when it wants a login.
@@ -272,69 +271,48 @@ test('SUSPECTED BUG: cookie values containing "=" are truncated when later Set-C
     assert.equal(calls[3].options.headers.Cookie, 'pad=tok; other=1');
 });
 
-test('dispatches are recorded to fuel_dispatch_history after the response (flag and null mapping)', async t => {
-    const supabase = createFakeSupabase(() => ({ data: null, error: null }));
-    const dispatches = [
-        {
-            TransactionID: 11, ChangeFlags: 2, FlightNumber: 'UA100', TailNumber: 'N47412', AircraftType: '737',
-            AirlineIcaoCode: 'UAL', Destination: 'KDEN', Quantity: 0, QuantityInWeight: 0, Density: 6.7,
-            TransactionStatusID: 3, ArrivalDate: '2026-11-13 14:30', DepartureDate: '2026-11-13 16:05'
-        },
-        { TransactionID: 12, FlightNumber: '', Quantity: null }
-    ];
+test('each successful poll is recorded through record_fuel_dispatches with the raw QT list', async t => {
+    const dispatches = [{ FlightID: 7, TransactionID: 'a', Gate: '4', TerminalNumber: 'A' }];
+    const supabase = createFakeSupabase(call => (call.rpc ? { data: [], error: null } : { data: null, error: null }));
     scriptFetch(t, [jsonResponse({ Success: true, Detail: { Dispatches: dispatches } })]);
     const res = await post(loadModule(t, 'dispatch.js', { supabase }));
-    await flush();
     assert.equal(res.statusCode, 200);
+    const call = supabase.calls.find(c => c.rpc);
+    assert.equal(call.rpc, 'record_fuel_dispatches');
+    assert.deepEqual(call.rpcArgs, { p_dispatches: dispatches });
+    assert.equal(supabase.calls.filter(c => c.table === 'fuel_dispatch_history').length, 0, 'no direct table writes');
+});
 
-    const write = supabase.calls.find(c => c.table === 'fuel_dispatch_history');
-    assert.deepEqual(write.args('upsert')[1], { onConflict: 'transaction_id,change_flags', ignoreDuplicates: true });
-    const [full, sparse] = write.args('upsert')[0];
-    assert.deepEqual(full, {
-        transaction_id: 11, change_flags: 2, flight_number: 'UA100', tail_number: 'N47412', aircraft_type: '737',
-        airline_icao_code: 'UAL', destination: 'KDEN',
-        quantity: 0, quantity_in_weight: 0, density: 6.7, transaction_status_id: 3, // zero kept, not nulled
-        // QT dates are "YYYY-MM-DD HH:mm" in server-local time
-        arrival_date: new Date('2026-11-13T14:30:00').toISOString(),
-        departure_date: new Date('2026-11-13T16:05:00').toISOString()
-    });
-    assert.deepEqual(sparse, {
-        transaction_id: 12, change_flags: 0, flight_number: null, tail_number: null, aircraft_type: null,
-        airline_icao_code: null, destination: null, quantity: null, quantity_in_weight: null, density: null,
-        transaction_status_id: null, arrival_date: null, departure_date: null
+test('the changes between recorded versions come back as _changes', async t => {
+    const versions = [
+        { flight_key: '7', version: 1, gate: 'A2', recorded_at: '2026-11-17T15:00:00Z' },
+        { flight_key: '7', version: 2, gate: 'A4', recorded_at: '2026-11-17T15:10:00Z' }
+    ];
+    const supabase = createFakeSupabase(call => (call.rpc ? { data: versions, error: null } : { data: null, error: null }));
+    scriptFetch(t, [jsonResponse({ Success: true, Detail: { Dispatches: [{ FlightID: 7 }] } })]);
+    const res = await post(loadModule(t, 'dispatch.js', { supabase }));
+    assert.deepEqual(res.body._changes, {
+        '7': [{ kind: 'gate', oldValue: 'A2', newValue: 'A4', detectedAt: '2026-11-17T15:10:00Z' }]
     });
 });
 
-test('history is not written when there are no dispatches or no database', async t => {
-    const supabase = createFakeSupabase(() => ({ data: null, error: null }));
-    scriptFetch(t, [jsonResponse({ Success: true, Detail: { Dispatches: [] } }), jsonResponse({ Success: true })]);
+test('nothing is recorded for an empty feed, a QT failure body or no database', async t => {
+    const supabase = createFakeSupabase(() => ({ data: [], error: null }));
+    scriptFetch(t, [jsonResponse({ Success: true, Detail: { Dispatches: [] } }), jsonResponse({ Success: false })]);
     const handler = loadModule(t, 'dispatch.js', { supabase });
-    await post(handler);
-    await post(handler);
-    await flush();
-    assert.equal(supabase.calls.filter(c => c.table === 'fuel_dispatch_history').length, 0);
+    const empty = await post(handler);
+    const failed = await post(handler);
+    assert.equal(supabase.calls.filter(c => c.rpc).length, 0);
+    assert.deepEqual(empty.body._changes, {});
+    assert.equal(failed.body._changes, undefined);
 });
 
-test('a history write failure is logged and does not affect the response', async t => {
+test('a record_fuel_dispatches failure is logged, gives _changes: null and does not fail the poll', async t => {
     const log = silenceConsole(t);
-    const supabase = createFakeSupabase(call => call.table === 'fuel_dispatch_history'
-        ? { error: new Error('history write failed') } : { data: null, error: null });
-    scriptFetch(t, [jsonResponse({ Success: true, Detail: { Dispatches: [{ TransactionID: 1 }] } })]);
+    const supabase = createFakeSupabase(call => (call.rpc ? { data: null, error: { message: 'function does not exist' } } : { data: null, error: null }));
+    scriptFetch(t, [jsonResponse({ Success: true, Detail: { Dispatches: [{ FlightID: 1 }] } })]);
     const res = await post(loadModule(t, 'dispatch.js', { supabase }));
-    await flush();
     assert.equal(res.statusCode, 200);
-    assert.ok(log.error.mock.calls.some(c => c.arguments.join(' ').includes('history write failed')));
-});
-
-test('a history write that throws is caught by the fire-and-forget handler', async t => {
-    const log = silenceConsole(t);
-    const supabase = createFakeSupabase(call => {
-        if (call.table === 'fuel_dispatch_history') throw new Error('boom');
-        return { data: null, error: null };
-    });
-    scriptFetch(t, [jsonResponse({ Success: true, Detail: { Dispatches: [{ TransactionID: 1 }] } })]);
-    const res = await post(loadModule(t, 'dispatch.js', { supabase }));
-    await flush();
-    assert.equal(res.statusCode, 200);
-    assert.ok(log.error.mock.calls.some(c => String(c.arguments[0]).includes('dispatch history async error')));
+    assert.equal(res.body._changes, null);
+    assert.ok(log.error.mock.calls.some(c => c.arguments.join(' ').includes('function does not exist')));
 });

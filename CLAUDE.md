@@ -71,18 +71,29 @@ back to stale cache or an empty result on failure. When a tail isn't in ADS-B
 range (most of a flight's transit), the card just shows QT's own time with no
 `live` badge.
 
-## Dispatch Change Log (added November 2026)
+## Dispatch History and Change Markers (November 2026)
 
-QT changes to a flight (fuel, gate, arrival, departure, tail swap) are
-detected server-side in `api/_dispatch_changes.js`: each `/api/dispatch` poll
-diffs against `dispatch_snapshots` and appends to `dispatch_changes`
-(Supabase, see `schema/supabase-schema.sql`), returning the log as `_changes`.
-Cards show a ⚠ marker on the changed box for as long as the flight is in the
-feed (hover, or tap on touch screens, lists every change). Changes that arrive
-while the page is open also get a banner, which a refresh clears. MEL is QT's
-current state, so its banner always shows. If the tables are missing or
-Supabase fails, `_changes` is `null` and the page falls back to diffing polls
-in memory (the old behaviour, lost on refresh).
+`fuel_dispatch_history` (shared with fbo-manager) holds one row per *version*
+of a QT flight, keyed `(flight_key, version)`, where `flight_key` is QT's
+FlightID (QT issues a new TransactionID when a dispatch is edited, so
+TransactionID can't identify a flight). Every `/api/dispatch` poll calls the
+`record_fuel_dispatches(p_dispatches jsonb)` Postgres function with QT's raw
+dispatch list: it adds a version for each flight whose data changed and
+returns all versions of the flights in the feed (one round trip). QT's dates
+are KMSO local time and are stored as real instants (America/Denver).
+
+- **Change markers**: `api/_dispatch_history.js` compares consecutive
+  versions (fuel, gate, arrival, departure, tail) and returns them as
+  `_changes`. Cards show a ⚠ marker on the changed box for as long as the
+  flight is in the feed (hover, or tap on touch screens, lists every change).
+  Changes that arrive while the page is open also get a banner, which a
+  refresh clears. MEL is QT's current state, so its banner always shows. If
+  the database is unavailable, `_changes` is `null` and the page diffs polls
+  in memory instead (lost on refresh).
+- **Trends** (`/api/dispatch-history`): each flight's latest version, bucketed
+  by local date.
+- Rows from before November 2026 have no FlightID and are keyed
+  `legacy:<flight>:<local date>`. The migration is in `schema/migrations/`.
 
 ## Fuel Farm Enhancements (TODO)
 - **Enhanced Tank Level Visual Indicators**: color-code the tank fill zones —

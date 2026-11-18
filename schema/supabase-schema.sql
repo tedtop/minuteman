@@ -96,19 +96,30 @@ COMMENT ON TABLE fuel_gravity_readings IS 'Fuel load gravity QC readings for the
 -- easy to read, tune, and log server-side instead of living in a second,
 -- harder-to-debug implementation here.
 
--- Dispatch history for trend analytics
--- One row per distinct (TransactionID, ChangeFlags) state seen during polling.
--- The UNIQUE constraint deduplicates concurrent client polls via ON CONFLICT DO NOTHING.
--- For analytics, use the highest change_flags row per transaction_id to get final quantities.
+-- QT dispatch history: one row per version of a flight, shared by Minuteman
+-- and fbo-manager. A new version is written only when something QT reports
+-- about the flight changes, so:
+--   * a flight's current state is its latest version,
+--   * the changes shown on the dispatch cards (fuel, gate, arrival, departure,
+--     tail) come from comparing consecutive versions (api/_dispatch_history.js),
+--   * fuel-demand trends use each flight's latest version, so a flight QT
+--     re-issues under a new TransactionID is counted once.
+-- flight_key is QT's FlightID (else TransactionID). Rows recorded before
+-- November 2026 have no FlightID and use 'legacy:<flight>:<local date>'.
+-- Write through record_fuel_dispatches(), never with plain inserts.
 CREATE TABLE IF NOT EXISTS fuel_dispatch_history (
     id                    BIGSERIAL PRIMARY KEY,
-    transaction_id        UUID NOT NULL,
-    change_flags          INTEGER NOT NULL DEFAULT 0,
+    flight_key            TEXT NOT NULL,
+    version               INTEGER NOT NULL,
+    transaction_id        TEXT,
+    change_flags          INTEGER,
     flight_number         VARCHAR(20),
     tail_number           VARCHAR(20),
     aircraft_type         VARCHAR(20),
     airline_icao_code     VARCHAR(10),
     destination           VARCHAR(10),
+    gate                  TEXT,
+    flight_status         TEXT,
     quantity              DECIMAL(10,2),
     quantity_in_weight    INTEGER,
     density               DECIMAL(6,4),
@@ -117,7 +128,7 @@ CREATE TABLE IF NOT EXISTS fuel_dispatch_history (
     departure_date        TIMESTAMPTZ,
     recorded_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT uq_dispatch_txn_change UNIQUE (transaction_id, change_flags)
+    CONSTRAINT uq_fuel_dispatch_history_version UNIQUE (flight_key, version)
 );
 
 CREATE INDEX IF NOT EXISTS idx_fuel_dispatch_history_flight_date
@@ -129,7 +140,91 @@ CREATE INDEX IF NOT EXISTS idx_fuel_dispatch_history_airline_date
 CREATE INDEX IF NOT EXISTS idx_fuel_dispatch_history_recorded
     ON fuel_dispatch_history (recorded_at DESC);
 
-COMMENT ON TABLE fuel_dispatch_history IS 'Time-series of dispatch states from QT API polling. Used for fuel demand trend analytics per flight number per day.';
+COMMENT ON TABLE fuel_dispatch_history IS 'One row per version of a QT dispatch (flight). Written by record_fuel_dispatches(); drives the dispatch-card change markers and fuel-demand trends.';
+
+-- Only the servers (service role, which bypasses RLS) touch this table.
+ALTER TABLE fuel_dispatch_history ENABLE ROW LEVEL SECURITY;
+
+-- Records one QT poll. p_dispatches is QT's raw Detail.Dispatches array. For
+-- each flight whose data differs from its latest version, inserts the next
+-- version; then returns every version of the flights passed, oldest first.
+-- QT's dates are KMSO local time ("2026-11-16 13:25"; "0001-01-01 ..." means
+-- unset) and are stored as real instants in America/Denver. Several clients
+-- poll at once: if two record the same new version, the unique
+-- (flight_key, version) makes the second insert a no-op.
+CREATE OR REPLACE FUNCTION record_fuel_dispatches(p_dispatches JSONB)
+RETURNS SETOF fuel_dispatch_history
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+    d       JSONB;
+    v       fuel_dispatch_history%ROWTYPE;
+    latest  fuel_dispatch_history%ROWTYPE;
+    keys    TEXT[] := '{}';
+BEGIN
+    FOR d IN SELECT * FROM jsonb_array_elements(COALESCE(p_dispatches, '[]'::jsonb)) LOOP
+        v := NULL;
+        v.flight_key := COALESCE(NULLIF(d->>'FlightID', ''), NULLIF(d->>'TransactionID', ''));
+        CONTINUE WHEN v.flight_key IS NULL;
+        keys := keys || v.flight_key;
+
+        v.transaction_id        := NULLIF(d->>'TransactionID', '');
+        v.change_flags          := (d->>'ChangeFlags')::INTEGER;
+        v.flight_number         := NULLIF(d->>'FlightNumber', '');
+        v.tail_number           := NULLIF(UPPER(TRIM(d->>'TailNumber')), '');
+        v.aircraft_type         := NULLIF(d->>'AircraftType', '');
+        v.airline_icao_code     := NULLIF(d->>'AirlineIcaoCode', '');
+        v.destination           := NULLIF(d->>'Destination', '');
+        v.gate := CASE
+            WHEN COALESCE(d->>'Gate', '') IN ('', '?') THEN NULL
+            WHEN COALESCE(d->>'TerminalNumber', '') IN ('', '-', '?', '0') THEN d->>'Gate'
+            ELSE (d->>'TerminalNumber') || (d->>'Gate')
+        END;
+        v.flight_status         := NULLIF(d->>'FlightStatus', '');
+        v.quantity              := (d->>'Quantity')::NUMERIC;
+        v.quantity_in_weight    := ROUND((d->>'QuantityInWeight')::NUMERIC);
+        v.density               := (d->>'Density')::NUMERIC;
+        v.transaction_status_id := (d->>'TransactionStatusID')::SMALLINT;
+        v.arrival_date := CASE WHEN COALESCE(d->>'ArrivalDate', '') = '' OR d->>'ArrivalDate' LIKE '0001-01-01%' THEN NULL
+            ELSE (d->>'ArrivalDate')::TIMESTAMP AT TIME ZONE 'America/Denver' END;
+        v.departure_date := CASE WHEN COALESCE(d->>'DepartureDate', '') = '' OR d->>'DepartureDate' LIKE '0001-01-01%' THEN NULL
+            ELSE (d->>'DepartureDate')::TIMESTAMP AT TIME ZONE 'America/Denver' END;
+
+        SELECT * INTO latest FROM fuel_dispatch_history
+        WHERE flight_key = v.flight_key ORDER BY version DESC LIMIT 1;
+
+        IF FOUND AND (latest.transaction_id, latest.change_flags, latest.flight_number, latest.tail_number,
+                      latest.aircraft_type, latest.airline_icao_code, latest.destination, latest.gate,
+                      latest.flight_status, latest.quantity, latest.quantity_in_weight, latest.density,
+                      latest.transaction_status_id, latest.arrival_date, latest.departure_date)
+            IS NOT DISTINCT FROM
+                     (v.transaction_id, v.change_flags, v.flight_number, v.tail_number,
+                      v.aircraft_type, v.airline_icao_code, v.destination, v.gate,
+                      v.flight_status, v.quantity, v.quantity_in_weight, v.density,
+                      v.transaction_status_id, v.arrival_date, v.departure_date) THEN
+            CONTINUE;
+        END IF;
+
+        INSERT INTO fuel_dispatch_history (
+            flight_key, version, transaction_id, change_flags, flight_number, tail_number, aircraft_type,
+            airline_icao_code, destination, gate, flight_status, quantity, quantity_in_weight, density,
+            transaction_status_id, arrival_date, departure_date)
+        VALUES (
+            v.flight_key, COALESCE(latest.version, 0) + 1, v.transaction_id, v.change_flags, v.flight_number,
+            v.tail_number, v.aircraft_type, v.airline_icao_code, v.destination, v.gate, v.flight_status,
+            v.quantity, v.quantity_in_weight, v.density, v.transaction_status_id, v.arrival_date, v.departure_date)
+        ON CONFLICT (flight_key, version) DO NOTHING;
+    END LOOP;
+
+    RETURN QUERY SELECT * FROM fuel_dispatch_history
+        WHERE flight_key = ANY(keys) ORDER BY flight_key, version;
+END;
+$$;
+
+-- Functions are executable by everyone by default; this one is server-only.
+REVOKE ALL ON FUNCTION record_fuel_dispatches(JSONB) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION record_fuel_dispatches(JSONB) TO service_role;
 
 -- Shared QT Technologies session cookie (singleton row).
 -- All clients (phones, office desktops) talk only to our /api/dispatch proxy,
@@ -209,38 +304,3 @@ ORDER BY tank_id, level ASC, recorded_at ASC
 ON CONFLICT (tank_id) DO UPDATE
     SET level = EXCLUDED.level, recorded_at = EXCLUDED.recorded_at
     WHERE EXCLUDED.level < tank_level_min.level;
-
--- QT dispatch change log for /api/dispatch (api/_dispatch_changes.js).
--- dispatch_snapshots holds the last values seen per flight; each poll diffs
--- against it and appends fuel/gate/arrival/departure/tail changes to
--- dispatch_changes, so the dispatch cards can flag a change after a page
--- refresh and on every screen. Several clients poll at once, so the unique
--- index turns a second client's insert of the same transition into a no-op.
--- flight_key is the page's key for a flight: FlightID, else TransactionID.
-CREATE TABLE IF NOT EXISTS dispatch_snapshots (
-    flight_key TEXT PRIMARY KEY,
-    fuel       TEXT,
-    gate       TEXT,
-    arrival    TEXT,
-    departure  TEXT,
-    tail       TEXT,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS dispatch_changes (
-    id          BIGSERIAL PRIMARY KEY,
-    flight_key  TEXT NOT NULL,
-    kind        TEXT NOT NULL CHECK (kind IN ('fuel', 'gate', 'arrival', 'departure', 'tail')),
-    old_value   TEXT NOT NULL,
-    new_value   TEXT NOT NULL,
-    detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_dispatch_changes_transition
-    ON dispatch_changes (flight_key, kind, old_value, new_value);
-
-CREATE INDEX IF NOT EXISTS idx_dispatch_changes_flight
-    ON dispatch_changes (flight_key, detected_at);
-
-COMMENT ON TABLE dispatch_snapshots IS 'Last fuel/gate/arrival/departure/tail values seen per QT flight, diffed on each /api/dispatch poll.';
-COMMENT ON TABLE dispatch_changes IS 'QT dispatch changes per flight (fuel, gate, arrival, departure, tail), shown as change markers on the dispatch cards.';

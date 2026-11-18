@@ -8,7 +8,7 @@ const NOW = Date.UTC(2026, 10, 13, 18, 0, 0);
 const DAY = 24 * 60 * 60 * 1000;
 
 const row = (over = {}) => ({
-    transaction_id: 1, change_flags: 1, flight_number: 'UA100', airline_icao_code: 'UAL',
+    flight_key: String(1), version: 1, flight_number: 'UA100', airline_icao_code: 'UAL',
     departure_date: '2026-11-10T12:00:00.000Z', quantity: 100, quantity_in_weight: 680,
     transaction_status_id: 1, ...over
 });
@@ -86,11 +86,11 @@ test('no filters means no eq calls', async t => {
     assert.equal(supabase.calls[0].has('eq'), false);
 });
 
-test('keeps only the highest change_flags snapshot per transaction', async t => {
+test('counts each flight once, using its latest version', async t => {
     const { res } = await run(t, [
-        row({ transaction_id: 5, change_flags: 1, quantity: 0, quantity_in_weight: 0 }),
-        row({ transaction_id: 5, change_flags: 3, quantity: 250, quantity_in_weight: 1700 }),
-        row({ transaction_id: 5, change_flags: 2, quantity: 100, quantity_in_weight: 680 })
+        row({ flight_key: String(5), version: 1, quantity: 0, quantity_in_weight: 0 }),
+        row({ flight_key: String(5), version: 3, quantity: 250, quantity_in_weight: 1700 }),
+        row({ flight_key: String(5), version: 2, quantity: 100, quantity_in_weight: 680 })
     ]);
     assert.equal(res.body.rows.length, 1);
     assert.equal(res.body.rows[0].totalGallons, 250);
@@ -100,40 +100,41 @@ test('keeps only the highest change_flags snapshot per transaction', async t => 
 
 test('excludes cancelled (status 7) transactions and rows without a departure date', async t => {
     const { res } = await run(t, [
-        row({ transaction_id: 1 }),
-        row({ transaction_id: 2, transaction_status_id: 7 }),
-        row({ transaction_id: 3, departure_date: null })
+        row({ flight_key: String(1) }),
+        row({ flight_key: String(2), transaction_status_id: 7 }),
+        row({ flight_key: String(3), departure_date: null })
     ]);
     assert.equal(res.body.rows.length, 1);
     assert.equal(res.body.rows[0].dispatchCount, 1);
 });
 
-test('a cancelled final snapshot hides the transaction even if earlier snapshots were live', async t => {
+test('a cancelled latest version hides the flight even if earlier versions were live', async t => {
     const { res } = await run(t, [
-        row({ transaction_id: 9, change_flags: 1, transaction_status_id: 1 }),
-        row({ transaction_id: 9, change_flags: 2, transaction_status_id: 7 })
+        row({ flight_key: String(9), version: 1, transaction_status_id: 1 }),
+        row({ flight_key: String(9), version: 2, transaction_status_id: 7 })
     ]);
     assert.deepEqual(res.body.rows, []);
 });
 
-test('aggregates by day + flight number and rounds gallons to 1 decimal', async t => {
+test('aggregates by local (KMSO) day + flight number and rounds gallons to 1 decimal', async t => {
     const { res } = await run(t, [
-        row({ transaction_id: 1, quantity: 100.04, quantity_in_weight: 680.5 }),
-        row({ transaction_id: 2, quantity: 50.06, quantity_in_weight: 340.25, departure_date: '2026-11-10T23:59:00.000Z' }),
-        row({ transaction_id: 3, flight_number: 'DL200', airline_icao_code: 'DAL', quantity: 10, quantity_in_weight: 68 }),
-        row({ transaction_id: 4, departure_date: '2026-11-11T00:01:00.000Z', quantity: 5, quantity_in_weight: 34 })
+        row({ flight_key: String(1), quantity: 100.04, quantity_in_weight: 680.5 }),
+        row({ flight_key: String(2), quantity: 50.06, quantity_in_weight: 340.25, departure_date: '2026-11-10T23:59:00.000Z' }),
+        row({ flight_key: String(3), flight_number: 'DL200', airline_icao_code: 'DAL', quantity: 10, quantity_in_weight: 68 }),
+        row({ flight_key: String(4), departure_date: '2026-11-11T07:01:00.000Z', quantity: 5, quantity_in_weight: 34 }), // 00:01 MST on the 11th
+        row({ flight_key: String(5), departure_date: '2026-11-11T00:01:00.000Z', quantity: 1, quantity_in_weight: 7 })  // 17:01 MST on the 10th
     ]);
     assert.deepEqual(res.body.rows, [
         { date: '2026-11-10', flightNumber: 'DL200', airlineIcaoCode: 'DAL', totalGallons: 10, totalLbs: 68, dispatchCount: 1 },
-        { date: '2026-11-10', flightNumber: 'UA100', airlineIcaoCode: 'UAL', totalGallons: 150.1, totalLbs: 1020.75, dispatchCount: 2 },
+        { date: '2026-11-10', flightNumber: 'UA100', airlineIcaoCode: 'UAL', totalGallons: 151.1, totalLbs: 1027.75, dispatchCount: 3 },
         { date: '2026-11-11', flightNumber: 'UA100', airlineIcaoCode: 'UAL', totalGallons: 5, totalLbs: 34, dispatchCount: 1 }
     ]);
 });
 
 test('null quantities count as zero', async t => {
     const { res } = await run(t, [
-        row({ transaction_id: 1, quantity: null, quantity_in_weight: null }),
-        row({ transaction_id: 2, quantity: 20, quantity_in_weight: 136 })
+        row({ flight_key: String(1), quantity: null, quantity_in_weight: null }),
+        row({ flight_key: String(2), quantity: 20, quantity_in_weight: 136 })
     ]);
     assert.equal(res.body.rows[0].totalGallons, 20);
     assert.equal(res.body.rows[0].totalLbs, 136);
@@ -142,10 +143,10 @@ test('null quantities count as zero', async t => {
 
 test('groupBy=week buckets by ISO week start (Monday), Sunday belongs to the prior Monday', async t => {
     const { res } = await run(t, [
-        row({ transaction_id: 1, departure_date: '2026-11-09T10:00:00.000Z' }), // Mon
-        row({ transaction_id: 2, departure_date: '2026-11-12T10:00:00.000Z' }), // Thu
-        row({ transaction_id: 3, departure_date: '2026-11-15T10:00:00.000Z' }), // Sun
-        row({ transaction_id: 4, departure_date: '2026-11-16T10:00:00.000Z' })  // next Mon
+        row({ flight_key: String(1), departure_date: '2026-11-09T10:00:00.000Z' }), // Mon
+        row({ flight_key: String(2), departure_date: '2026-11-12T10:00:00.000Z' }), // Thu
+        row({ flight_key: String(3), departure_date: '2026-11-15T10:00:00.000Z' }), // Sun
+        row({ flight_key: String(4), departure_date: '2026-11-16T10:00:00.000Z' })  // next Mon
     ], { groupBy: 'week', range: 'all' });
     assert.equal(res.body.groupBy, 'week');
     assert.deepEqual(res.body.rows.map(r => [r.date, r.dispatchCount]), [['2026-11-09', 3], ['2026-11-16', 1]]);
@@ -161,22 +162,22 @@ test('rows with a missing flight number do not break aggregation or sorting', as
     // with a null flightNumber that yields undefined/"null" comparisons, so the
     // relative order of null-flight rows is not meaningful. Only asserting no crash.
     const { res } = await run(t, [
-        row({ transaction_id: 1, flight_number: null }),
-        row({ transaction_id: 2, flight_number: 'UA100' })
+        row({ flight_key: String(1), flight_number: null }),
+        row({ flight_key: String(2), flight_number: 'UA100' })
     ]);
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.rows.length, 2);
 });
 
 test('pages through results 1000 rows at a time until a short page', async t => {
-    const rows = Array.from({ length: 1500 }, (_, i) => row({ transaction_id: i + 1 }));
+    const rows = Array.from({ length: 1500 }, (_, i) => row({ flight_key: String(i + 1) }));
     const { res, supabase } = await run(t, rows);
     assert.deepEqual(supabase.calls.map(c => c.args('range')), [[0, 999], [1000, 1999]]);
     assert.equal(res.body.rows[0].dispatchCount, 1500);
 });
 
 test('an exact multiple of the page size fetches one extra (empty) page', async t => {
-    const rows = Array.from({ length: 1000 }, (_, i) => row({ transaction_id: i + 1 }));
+    const rows = Array.from({ length: 1000 }, (_, i) => row({ flight_key: String(i + 1) }));
     const { supabase } = await run(t, rows);
     assert.equal(supabase.calls.length, 2);
 });

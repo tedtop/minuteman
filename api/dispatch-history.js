@@ -11,6 +11,10 @@ const RANGE_DAYS = {
 const DEFAULT_RANGE = '30d';
 const PAGE_SIZE = 1000;
 
+// YYYY-MM-DD in KMSO local time.
+const LOCAL_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' });
+const localDate = d => LOCAL_DATE.format(d);
+
 let supabase = null;
 if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     supabase = createClient(
@@ -50,7 +54,7 @@ module.exports = async function handler(req, res) {
         for (let page = 0; ; page++) {
             let q = supabase
                 .from('fuel_dispatch_history')
-                .select('transaction_id, change_flags, flight_number, airline_icao_code, departure_date, quantity, quantity_in_weight, transaction_status_id')
+                .select('flight_key, version, flight_number, airline_icao_code, departure_date, quantity, quantity_in_weight, transaction_status_id')
                 .order('departure_date', { ascending: true })
                 .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
@@ -65,31 +69,28 @@ module.exports = async function handler(req, res) {
             if (pageData.length < PAGE_SIZE) break;
         }
 
-        // De-duplicate: keep only the highest change_flags snapshot per transaction,
-        // so we use final fuel quantities rather than early zero-quantity states.
-        const latestByTxn = new Map();
+        // One count per flight: its latest version (final fuel figures, and a
+        // flight QT re-issued under a new TransactionID is still one flight).
+        const latestByFlight = new Map();
         for (const row of rawRows) {
-            const existing = latestByTxn.get(row.transaction_id);
-            if (!existing || row.change_flags > existing.change_flags) {
-                latestByTxn.set(row.transaction_id, row);
+            const existing = latestByFlight.get(row.flight_key);
+            if (!existing || row.version > existing.version) {
+                latestByFlight.set(row.flight_key, row);
             }
         }
 
         // Aggregate by date bucket + flight number, excluding cancelled (status 7)
         const buckets = new Map();
-        for (const row of latestByTxn.values()) {
+        for (const row of latestByFlight.values()) {
             if (row.transaction_status_id === 7) continue;
             if (!row.departure_date) continue;
 
-            const d = new Date(row.departure_date);
-            let dateKey;
+            // Buckets are KMSO local dates, not UTC ones.
+            let dateKey = localDate(new Date(row.departure_date));
             if (groupBy === 'week') {
                 // ISO week start (Monday)
-                const day = d.getUTCDay();
-                const monday = new Date(d);
-                monday.setUTCDate(d.getUTCDate() - ((day + 6) % 7));
-                dateKey = monday.toISOString().slice(0, 10);
-            } else {
+                const d = new Date(`${dateKey}T00:00:00Z`);
+                d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
                 dateKey = d.toISOString().slice(0, 10);
             }
 
