@@ -1,17 +1,33 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { findFuelType, planWingLoad, truckCheck } = require('../public/wing-loading.js');
+const { findFuelType, findFuelTypeForQt, planWingLoad, truckCheck } = require('../public/wing-loading.js');
 
-const b737 = findFuelType('737');
+const b737 = findFuelType('B738');
 
-test('findFuelType recognises the common airline type strings', () => {
-    assert.equal(findFuelType('737').key, 'b737ng');
+test('findFuelType matches ICAO designators (what the tail lookup returns) only', () => {
+    assert.equal(findFuelType('B39M').key, 'b737max9');
     assert.equal(findFuelType('B738').key, 'b737ng');
-    assert.equal(findFuelType('B739M').key, 'b737max9');
-    assert.equal(findFuelType('E75').key, 'e175');
-    assert.equal(findFuelType('E175').key, 'e175');
+    assert.equal(findFuelType('b739').key, 'b737ng');
+    assert.equal(findFuelType('E75L').key, 'e175');
     assert.equal(findFuelType('A320').key, 'a320');
+    assert.equal(findFuelType('CRJ9').key, 'crj700');
+    assert.equal(findFuelType('737'), undefined, 'QT codes are not ICAO designators');
+    assert.equal(findFuelType('E7W'), undefined);
+    assert.equal(findFuelType('A321'), undefined, 'A321 tanks differ');
     assert.equal(findFuelType('C172'), undefined);
+    assert.equal(findFuelType(''), undefined);
+});
+
+test('findFuelTypeForQt maps the QT type codes seen in dispatch history', () => {
+    assert.equal(findFuelTypeForQt('737').key, 'b737ng');
+    assert.equal(findFuelTypeForQt('738K').key, 'b737ng');
+    assert.equal(findFuelTypeForQt('319').key, 'a320');
+    assert.equal(findFuelTypeForQt('E7W').key, 'e175');
+    assert.equal(findFuelTypeForQt('E75E').key, 'e175');
+    assert.equal(findFuelTypeForQt('OOC7'), undefined, 'unknown codes are not guessed');
+    assert.equal(findFuelTypeForQt('E70E'), undefined, 'E170 is not an E175');
+    assert.equal(findFuelTypeForQt('B738'), undefined, 'ICAO designators go through findFuelType');
+    assert.equal(findFuelTypeForQt(undefined), undefined);
 });
 
 // United UA1026 sheet, 10/29: 3740 / 0 / 3900 before, planned gate fuel 20,400 -> add 12,760.
@@ -38,7 +54,7 @@ test('splits a small uplift evenly across the wings and leaves the center empty'
 });
 
 test('has no center tank on an E175 and warns when the request will not fit', () => {
-    const e175 = findFuelType('E175');
+    const e175 = findFuelType('E75L');
     assert.equal(planWingLoad({ capacity: e175, plannedLbs: 15000 }).hasCenter, false);
     const over = planWingLoad({ capacity: e175, plannedLbs: 25000 });
     assert.equal(over.after.center, 0);
@@ -63,7 +79,7 @@ test('truckCheck compares calculated gallons with the truck meter against the 75
 // Card split: 737s load to 8650 per wing all year, the rest goes in the center.
 const { cardSplit, stepWing, clampWing, wingBounds, defaultWingLbs, hardWingMaxLbs } = require('../public/wing-loading.js');
 const max9 = findFuelType('B39M');
-const e175 = findFuelType('E175');
+const e175 = findFuelType('E75L');
 
 test('737 rows default to 8650 per wing, summer and winter', () => {
     for (const t of [b737, max9]) {
@@ -71,7 +87,7 @@ test('737 rows default to 8650 per wing, summer and winter', () => {
         assert.equal(defaultWingLbs(t, true), 8650);
     }
     // Other types keep the placard figure.
-    assert.equal(defaultWingLbs(findFuelType('CRJ700'), true), 7492);
+    assert.equal(defaultWingLbs(findFuelType('CRJ7'), true), 7492);
 });
 
 test('UA1026 requesting 18400 lbs on a 737 splits 8650/1100/8650', () => {
@@ -118,7 +134,7 @@ test('center cannot go negative: wing is held at half the planned fuel', () => {
 test('wing cannot go below 0 or below what leaves the center over its capacity', () => {
     assert.equal(stepWing(b737, 1000, 0, -1, true), 0);
     // CRJ700, 14,000 planned: center max 4,610 -> wing at least (14000 - 4610) / 2 = 4695.
-    const crj700 = findFuelType('CRJ700');
+    const crj700 = findFuelType('CRJ7');
     assert.deepEqual(wingBounds(crj700, 14000, false), { min: 4695, max: 7000 });
     assert.equal(stepWing(crj700, 14000, 4700, -1, false), 4695);
     assert.equal(stepWing(crj700, 14000, 4695, -1, false), 4695);

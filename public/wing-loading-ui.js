@@ -30,7 +30,7 @@
 
     // The fuel-type row for a dispatch: ADS-B's specific variant (B39M) when it is one we know, else QT's type.
     function fuelTypeFor(aircraftType, equipmentCode) {
-        return WL.findFuelType(equipmentCode) || WL.findFuelType(aircraftType);
+        return WL.findFuelType(equipmentCode) || WL.findFuelTypeForQt(aircraftType);
     }
 
     // Adjusted per-wing figures, per flight, in this browser only. { [id]: { wing, t } }; entries older
