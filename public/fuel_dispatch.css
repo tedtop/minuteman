@@ -693,7 +693,7 @@ input:checked+.toggle-slider:before {
 /* "Fuel sheet" button under each card + the shared Fuel sheet dialog */
 .wing-loading {
     display: flex;
-    justify-content: flex-end;
+    justify-content: center;
     margin-top: 8px;
 }
 
