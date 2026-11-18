@@ -620,3 +620,246 @@ input:checked+.toggle-slider:before {
     position: relative;
     z-index: 10;
 }
+
+/* The fuel change marker sits in the green box's corner, beside (not inside)
+   the fuel figure, which the wing-loading arrows rewrite. */
+.fuel-info > .change-marker {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    margin: 0;
+}
+
+.fuel-info > .change-marker .change-popover {
+    left: auto;
+    right: 0;
+}
+
+/* Wing split in the green fuel box (L / center / R) with 50 lb per-wing arrows */
+.wl-fuel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px 8px;
+}
+
+.wl-split-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.wl-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid rgba(39, 174, 96, 0.5);
+    border-radius: 8px;
+    background: #fff;
+    color: #27ae60;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.wl-step:hover:not(:disabled) {
+    background: #27ae60;
+    color: #fff;
+}
+
+.wl-step:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+@media (max-width: 400px) {
+    .wl-fuel {
+        font-size: 16px;
+    }
+
+    .wl-step {
+        min-width: 32px;
+        height: 32px;
+    }
+}
+
+/* "Fuel sheet" button under each card + the shared Fuel sheet dialog */
+.wing-loading {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+.wing-loading-btn {
+    flex-shrink: 0;
+    padding: 3px 8px;
+    border: 1px solid #667eea;
+    border-radius: 6px;
+    background: #fff;
+    color: #667eea;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.wing-loading-btn:hover {
+    background: #667eea;
+    color: #fff;
+}
+
+.wl-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.wl-dialog {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 20px;
+    border-radius: 15px;
+    background: #fff;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.wl-dialog h3 {
+    margin-right: 28px;
+    font-size: 18px;
+}
+
+.wl-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    border: none;
+    background: none;
+    font-size: 26px;
+    line-height: 1;
+    color: #7f8c8d;
+    cursor: pointer;
+}
+
+.wl-desc {
+    margin: 4px 0 12px;
+    font-size: 12px;
+    color: #7f8c8d;
+}
+
+.wl-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    margin-bottom: 12px;
+    font-size: 12px;
+}
+
+.wl-controls label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.wl-dialog input,
+.wl-dialog select {
+    padding: 4px 6px;
+    border: 1px solid #ccd;
+    border-radius: 5px;
+    font-size: 13px;
+    text-align: right;
+}
+
+.wl-dialog select {
+    text-align: left;
+}
+
+.wl-table {
+    width: 100%;
+    margin-bottom: 12px;
+    border-collapse: collapse;
+    text-align: right;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.wl-table th {
+    font-size: 10px;
+    font-weight: 400;
+    text-transform: uppercase;
+    color: #7f8c8d;
+}
+
+.wl-table td {
+    padding: 3px 0;
+}
+
+.wl-table .wl-left {
+    text-align: left;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.wl-table .wl-before {
+    width: 80px;
+}
+
+.wl-table .wl-total td {
+    border-top: 1px solid #dde;
+}
+
+.wl-bold {
+    font-weight: 700;
+}
+
+.wl-lines {
+    padding: 0 12px;
+    border: 1px solid #dde;
+    border-radius: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.wl-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 5px 0;
+}
+
+.wl-line + .wl-line {
+    border-top: 1px solid #dde;
+}
+
+.wl-line > span:first-child {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.wl-ok { color: #27ae60; }
+.wl-bad { color: #e74c3c; }
+.wl-muted { color: #7f8c8d; font-size: 12px; }
+
+.wl-warnings p {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #e74c3c;
+}
+
+.wl-note {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #7f8c8d;
+}
